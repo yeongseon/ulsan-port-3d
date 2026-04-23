@@ -61,7 +61,11 @@ function getEdgesContainer(value: unknown): unknown[] {
 }
 
 function toGraphNodeType(value: unknown): GraphNodeType {
-  return value === 'berth' || value === 'operator' || value === 'zone' ? value : 'vessel';
+  const v = typeof value === 'string' ? value.toLowerCase() : '';
+  if (v === 'berth') return 'berth';
+  if (v === 'operator') return 'operator';
+  if (v === 'zone' || v === 'portzone') return 'zone';
+  return 'vessel';
 }
 
 function normalizeGraphNode(entry: unknown): GraphNode | null {
