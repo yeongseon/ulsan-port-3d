@@ -7,8 +7,7 @@ from app.services.pubsub import RedisPubSubService
 router = APIRouter(tags=["websocket"])
 
 
-@router.websocket("/ws/events")
-async def websocket_events(websocket: WebSocket) -> None:
+async def _stream_events(websocket: WebSocket) -> None:
     await websocket.accept()
     pubsub_service = RedisPubSubService()
     try:
@@ -23,7 +22,7 @@ async def websocket_events(websocket: WebSocket) -> None:
 
     async def drain_client() -> None:
         while True:
-            await websocket.receive_text()
+            _ = await websocket.receive_text()
 
     sender = asyncio.create_task(forward_messages())
     receiver = asyncio.create_task(drain_client())
@@ -32,11 +31,21 @@ async def websocket_events(websocket: WebSocket) -> None:
         for task in done:
             task.result()
         for task in pending:
-            task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+            _ = task.cancel()
+            _ = await asyncio.gather(task, return_exceptions=True)
     except WebSocketDisconnect:
-        sender.cancel()
-        receiver.cancel()
-        await asyncio.gather(sender, receiver, return_exceptions=True)
+        _ = sender.cancel()
+        _ = receiver.cancel()
+        _ = await asyncio.gather(sender, receiver, return_exceptions=True)
     finally:
         await pubsub_service.close_pubsub(pubsub)
+
+
+@router.websocket("/ws/live")
+async def websocket_live(websocket: WebSocket) -> None:
+    await _stream_events(websocket)
+
+
+@router.websocket("/ws/events")
+async def websocket_events(websocket: WebSocket) -> None:
+    await _stream_events(websocket)

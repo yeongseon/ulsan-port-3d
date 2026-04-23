@@ -1,9 +1,12 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
+from app.core.database import async_session
 from app.core.errors import (
     ProblemHTTPException,
     http_exception_handler,
@@ -23,10 +26,20 @@ from app.routers import (
     weather,
     websocket,
 )
+from app.services.seed import seed_reference_data
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    async with async_session() as session:
+        await seed_reference_data(session)
+    yield
+
 
 app = FastAPI(
     title="Ulsan Port 3D Monitoring API",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

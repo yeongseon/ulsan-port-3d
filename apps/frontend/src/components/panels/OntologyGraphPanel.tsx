@@ -1,4 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { apiClient } from '@/api/client';
+import { useDataStore } from '@/stores/dataStore';
+import { useMapStore } from '@/stores/mapStore';
 
 interface GraphNode {
   id: string;
@@ -16,26 +19,14 @@ interface GraphEdge {
   label: string;
 }
 
-const SAMPLE_NODES: GraphNode[] = [
-  { id: 'v1', label: '대한상선', type: 'vessel' },
-  { id: 'v2', label: '현대타이거', type: 'vessel' },
-  { id: 'v3', label: '포스코케미칼', type: 'vessel' },
-  { id: 'b1', label: '1부두', type: 'berth' },
-  { id: 'b2', label: '오일터미널A', type: 'berth' },
-  { id: 'o1', label: '현대상선', type: 'operator' },
-  { id: 'z1', label: '북항구역', type: 'zone' },
-];
+type GraphPayload = {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+};
 
-const SAMPLE_EDGES: GraphEdge[] = [
-  { source: 'v1', target: 'b1', label: '정박' },
-  { source: 'v2', target: 'b2', label: '정박' },
-  { source: 'v3', target: 'z1', label: '진입' },
-  { source: 'o1', target: 'v1', label: '운영' },
-  { source: 'o1', target: 'v2', label: '운영' },
-  { source: 'b1', target: 'z1', label: '속함' },
-];
+type GraphNodeType = GraphNode['type'];
 
-const NODE_COLORS: Record<string, string> = {
+const NODE_COLORS: Record<GraphNodeType, string> = {
   vessel: '#3b82f6',
   berth: '#22c55e',
   operator: '#f59e0b',
@@ -45,9 +36,73 @@ const NODE_COLORS: Record<string, string> = {
 const W = 360;
 const H = 280;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function getNodesContainer(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (!isRecord(value)) return [];
+
+  const nested = value.nodes ?? value.vertices ?? value.entities ?? value.items ?? value.data;
+  return Array.isArray(nested) ? nested : [];
+}
+
+function getEdgesContainer(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (!isRecord(value)) return [];
+
+  const nested = value.edges ?? value.links ?? value.relations ?? value.relationships;
+  return Array.isArray(nested) ? nested : [];
+}
+
+function toGraphNodeType(value: unknown): GraphNodeType {
+  return value === 'berth' || value === 'operator' || value === 'zone' ? value : 'vessel';
+}
+
+function normalizeGraphNode(entry: unknown): GraphNode | null {
+  if (!isRecord(entry)) return null;
+
+  const id = getString(entry.id ?? entry.node_id ?? entry.entity_id ?? entry.uid);
+  if (!id) return null;
+
+  return {
+    id,
+    label: getString(entry.label ?? entry.name ?? entry.title, id),
+    type: toGraphNodeType(entry.type ?? entry.node_type ?? entry.kind),
+  };
+}
+
+function normalizeGraphEdge(entry: unknown): GraphEdge | null {
+  if (!isRecord(entry)) return null;
+
+  const source = getString(entry.source ?? entry.from ?? entry.source_id ?? entry.subject);
+  const target = getString(entry.target ?? entry.to ?? entry.target_id ?? entry.object);
+  if (!source || !target) return null;
+
+  return {
+    source,
+    target,
+    label: getString(entry.label ?? entry.predicate ?? entry.relationship, ''),
+  };
+}
+
+function normalizeGraphPayload(payload: unknown): GraphPayload {
+  const source = isRecord(payload) && isRecord(payload.data) ? payload.data : payload;
+
+  return {
+    nodes: getNodesContainer(source).map(normalizeGraphNode).filter((node): node is GraphNode => node !== null),
+    edges: getEdgesContainer(source).map(normalizeGraphEdge).filter((edge): edge is GraphEdge => edge !== null),
+  };
+}
+
 function initPositions(nodes: GraphNode[]) {
   nodes.forEach((n, i) => {
-    const angle = (i / nodes.length) * Math.PI * 2;
+    const angle = (i / Math.max(nodes.length, 1)) * Math.PI * 2;
     n.x = W / 2 + Math.cos(angle) * 90;
     n.y = H / 2 + Math.sin(angle) * 90;
     n.vx = 0;
@@ -60,8 +115,8 @@ function tick(nodes: GraphNode[], edges: GraphEdge[]) {
   const repulsion = 800;
   const linkDist = 80;
 
-  for (let i = 0; i < nodes.length; i++) {
-    for (let j = i + 1; j < nodes.length; j++) {
+  for (let i = 0; i < nodes.length; i += 1) {
+    for (let j = i + 1; j < nodes.length; j += 1) {
       const a = nodes[i];
       const b = nodes[j];
       const dx = (b.x ?? 0) - (a.x ?? 0);
@@ -80,6 +135,7 @@ function tick(nodes: GraphNode[], edges: GraphEdge[]) {
     const a = nodeMap[edge.source];
     const b = nodeMap[edge.target];
     if (!a || !b) continue;
+
     const dx = (b.x ?? 0) - (a.x ?? 0);
     const dy = (b.y ?? 0) - (a.y ?? 0);
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -100,32 +156,100 @@ function tick(nodes: GraphNode[], edges: GraphEdge[]) {
 
 export function OntologyGraphPanel() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const nodesRef = useRef<GraphNode[]>(JSON.parse(JSON.stringify(SAMPLE_NODES)));
+  const nodesRef = useRef<GraphNode[]>([]);
+  const [edges, setEdges] = useState<GraphEdge[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const selectedEntityId = useMapStore((s) => s.selectedEntityId);
+  const selectedEntityType = useMapStore((s) => s.selectedEntityType);
+  const vessels = useDataStore((s) => s.vessels);
+  const berths = useDataStore((s) => s.berths);
+
+  const graphTarget = useMemo(() => {
+    if (selectedEntityType && selectedEntityId) {
+      return { type: selectedEntityType, id: selectedEntityId };
+    }
+
+    if (vessels[0]) {
+      return { type: 'vessel', id: vessels[0].vessel_id };
+    }
+
+    if (berths[0]) {
+      return { type: 'berth', id: berths[0].berth_id };
+    }
+
+    return null;
+  }, [berths, selectedEntityId, selectedEntityType, vessels]);
 
   useEffect(() => {
-    const nodes = nodesRef.current;
-    initPositions(nodes);
+    if (!graphTarget) {
+      nodesRef.current = [];
+      setEdges([]);
+      return;
+    }
 
+    let isMounted = true;
+    setIsLoading(true);
+
+    apiClient.getGraph(graphTarget.type, graphTarget.id)
+      .then((payload) => {
+        if (!isMounted) return;
+
+        const graph = normalizeGraphPayload(payload);
+        initPositions(graph.nodes);
+        nodesRef.current = graph.nodes;
+        setEdges(graph.edges);
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        nodesRef.current = [];
+        setEdges([]);
+        console.error('Failed to load ontology graph:', err);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [graphTarget]);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!canvas) return undefined;
 
-    let animId: number;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return undefined;
+
+    let animId = 0;
 
     const draw = () => {
-      tick(nodes, SAMPLE_EDGES);
+      const nodes = nodesRef.current;
+      tick(nodes, edges);
 
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = '#0a0e1a';
       ctx.fillRect(0, 0, W, H);
 
+      if (nodes.length === 0) {
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(isLoading ? '관계 그래프 불러오는 중...' : '선택된 엔티티 그래프가 없습니다', W / 2, H / 2);
+        animId = requestAnimationFrame(draw);
+        return;
+      }
+
       const nodeMap = Object.fromEntries(nodes.map((n) => [n.id, n]));
 
-      for (const edge of SAMPLE_EDGES) {
+      for (const edge of edges) {
         const a = nodeMap[edge.source];
         const b = nodeMap[edge.target];
         if (!a || !b) continue;
+
         ctx.beginPath();
         ctx.moveTo(a.x ?? 0, a.y ?? 0);
         ctx.lineTo(b.x ?? 0, b.y ?? 0);
@@ -145,7 +269,7 @@ export function OntologyGraphPanel() {
         const color = NODE_COLORS[node.type] ?? '#9ca3af';
         ctx.beginPath();
         ctx.arc(node.x ?? 0, node.y ?? 0, 8, 0, Math.PI * 2);
-        ctx.fillStyle = color + '33';
+        ctx.fillStyle = `${color}33`;
         ctx.fill();
         ctx.strokeStyle = color;
         ctx.lineWidth = 1.5;
@@ -162,7 +286,7 @@ export function OntologyGraphPanel() {
 
     animId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animId);
-  }, []);
+  }, [edges, isLoading]);
 
   return (
     <div className="p-3">
@@ -174,6 +298,12 @@ export function OntologyGraphPanel() {
         className="rounded border border-port-border w-full"
         style={{ imageRendering: 'crisp-edges' }}
       />
+      <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-port-muted">
+        <span>
+          {graphTarget ? `${graphTarget.type}:${graphTarget.id}` : '엔티티 선택 대기 중'}
+        </span>
+        <span>{nodesRef.current.length} nodes</span>
+      </div>
       <div className="flex flex-wrap gap-2 mt-2">
         {Object.entries(NODE_COLORS).map(([type, color]) => (
           <div key={type} className="flex items-center gap-1 text-xs text-port-muted">

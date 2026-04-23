@@ -27,6 +27,18 @@ async def get_berths(
 
 
 @router.get(
+    "/berths/{berth_id}",
+    response_model=BerthResponse,
+    responses={404: {"model": ProblemDetail}, 500: {"model": ProblemDetail}},
+)
+async def get_berth_detail(
+    berth_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> BerthResponse:
+    return await berth_service.get_berth_detail(db, berth_id)
+
+
+@router.get(
     "/berth-status/live",
     response_model=list[BerthStatusResponse],
     responses={500: {"model": ProblemDetail}},

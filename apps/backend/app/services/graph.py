@@ -507,9 +507,10 @@ async def _get_related_nodes(
 
 
 async def get_entity_graph(
-    db: AsyncSession, *, entity_type: str, entity_id: str
+    db: AsyncSession, *, entity_type: str, entity_id: str, depth: int = 1
 ) -> EntityGraphResponse:
     center = await _load_default(db, entity_type, entity_id)
+    _ = depth
     related = await _get_related_nodes(db, entity_type, center.id)
     return EntityGraphResponse(
         center=center,

@@ -1,30 +1,21 @@
+import { useEffect, useState } from 'react';
 import { useDataStore } from '@/stores/dataStore';
+import { apiClient } from '@/api/client';
 import {
   BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts';
 
-const ARRIVALS_DATA = [
-  { hour: '06', arrivals: 3 },
-  { hour: '08', arrivals: 7 },
-  { hour: '10', arrivals: 5 },
-  { hour: '12', arrivals: 9 },
-  { hour: '14', arrivals: 6 },
-  { hour: '16', arrivals: 11 },
-  { hour: '18', arrivals: 8 },
-  { hour: '20', arrivals: 4 },
-];
+type ArrivalDatum = {
+  hour: string;
+  arrivals: number;
+};
 
-const CONGESTION_DATA = [
-  { time: '00:00', value: 42 },
-  { time: '04:00', value: 35 },
-  { time: '08:00', value: 58 },
-  { time: '12:00', value: 72 },
-  { time: '16:00', value: 80 },
-  { time: '20:00', value: 65 },
-  { time: '23:00', value: 50 },
-];
+type CongestionDatum = {
+  time: string;
+  value: number;
+};
 
 const tooltipStyle = {
   backgroundColor: '#111827',
@@ -34,9 +25,91 @@ const tooltipStyle = {
   fontSize: '11px',
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function getNumber(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeArray(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload;
+  if (!isRecord(payload)) return [];
+
+  const nested = payload.data ?? payload.items ?? payload.results ?? payload.series;
+  return Array.isArray(nested) ? nested : [];
+}
+
+function normalizeArrivals(payload: unknown): ArrivalDatum[] {
+  return normalizeArray(payload)
+    .map((entry) => {
+      if (!isRecord(entry)) return null;
+
+      return {
+        hour: getString(entry.hour ?? entry.time ?? entry.label, '00'),
+        arrivals: getNumber(entry.arrivals ?? entry.value ?? entry.count),
+      };
+    })
+    .filter((entry): entry is ArrivalDatum => entry !== null);
+}
+
+function normalizeCongestion(payload: unknown): CongestionDatum[] {
+  return normalizeArray(payload)
+    .map((entry) => {
+      if (!isRecord(entry)) return null;
+
+      return {
+        time: getString(entry.time ?? entry.hour ?? entry.label, '00:00'),
+        value: getNumber(entry.value ?? entry.congestion ?? entry.rate),
+      };
+    })
+    .filter((entry): entry is CongestionDatum => entry !== null);
+}
+
 export function StatsPanel() {
   const vessels = useDataStore((s) => s.vessels);
   const berths = useDataStore((s) => s.berths);
+  const [arrivalsData, setArrivalsData] = useState<ArrivalDatum[]>([]);
+  const [congestionData, setCongestionData] = useState<CongestionDatum[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    apiClient.getStats()
+      .then((payload) => {
+        if (isMounted) {
+          setArrivalsData(normalizeArrivals(payload));
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load arrival stats:', err);
+        if (isMounted) {
+          setArrivalsData([]);
+        }
+      });
+
+    apiClient.getCongestion()
+      .then((payload) => {
+        if (isMounted) {
+          setCongestionData(normalizeCongestion(payload));
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load congestion stats:', err);
+        if (isMounted) {
+          setCongestionData([]);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const totalVessels = vessels.length;
   const normalBerths = berths.filter((b) => b.status === 'normal').length;
@@ -53,7 +126,7 @@ export function StatsPanel() {
       <div>
         <p className="text-xs text-port-muted mb-2">시간대별 입항 (척)</p>
         <ResponsiveContainer width="100%" height={100}>
-          <BarChart data={ARRIVALS_DATA} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+          <BarChart data={arrivalsData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
             <XAxis dataKey="hour" tick={{ fill: '#6b7280', fontSize: 9 }} />
             <YAxis tick={{ fill: '#6b7280', fontSize: 9 }} />
@@ -61,12 +134,13 @@ export function StatsPanel() {
             <Bar dataKey="arrivals" fill="#3b82f6" radius={[2, 2, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
+        {arrivalsData.length === 0 && <p className="mt-1 text-[11px] text-port-muted">입항 통계 데이터 없음</p>}
       </div>
 
       <div>
         <p className="text-xs text-port-muted mb-2">항만 혼잡도 추이 (%)</p>
         <ResponsiveContainer width="100%" height={90}>
-          <LineChart data={CONGESTION_DATA} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+          <LineChart data={congestionData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
             <XAxis dataKey="time" tick={{ fill: '#6b7280', fontSize: 9 }} />
             <YAxis tick={{ fill: '#6b7280', fontSize: 9 }} domain={[0, 100]} />
@@ -80,6 +154,7 @@ export function StatsPanel() {
             />
           </LineChart>
         </ResponsiveContainer>
+        {congestionData.length === 0 && <p className="mt-1 text-[11px] text-port-muted">혼잡도 데이터 없음</p>}
       </div>
     </div>
   );

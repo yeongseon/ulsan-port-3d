@@ -1,16 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { apiClient } from '@/api/client';
 
 interface Alert {
   id: string;
   level: 'warning' | 'danger' | 'info';
   message: string;
 }
-
-const SAMPLE_ALERTS: Alert[] = [
-  { id: '1', level: 'warning', message: '4부두 안벽 균열 점검 필요 — 진입 제한' },
-  { id: '2', level: 'danger', message: '태풍 예비 주의보 발령 — 24시간 내 접근 예상' },
-  { id: '3', level: 'info', message: '컨테이너 2부두 야간 작업 완료 예정 02:00' },
-];
 
 const LEVEL_CLASSES: Record<Alert['level'], string> = {
   warning: 'bg-port-warning/10 border-port-warning text-port-warning',
@@ -24,10 +19,71 @@ const LEVEL_ICON: Record<Alert['level'], string> = {
   info: 'ℹ',
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function toAlertLevel(value: unknown): Alert['level'] {
+  return value === 'warning' || value === 'danger' ? value : 'info';
+}
+
+function normalizeAlerts(payload: unknown): Alert[] {
+  const source = isRecord(payload) ? payload.data ?? payload.items ?? payload.results ?? payload.alerts ?? payload : payload;
+  if (!Array.isArray(source)) return [];
+
+  return source
+    .map((entry) => {
+      if (!isRecord(entry)) return null;
+
+      const id = getString(entry.id ?? entry.alert_id ?? entry.code);
+      const message = getString(entry.message ?? entry.title ?? entry.description);
+      if (!id || !message) return null;
+
+      return {
+        id,
+        level: toAlertLevel(entry.level ?? entry.severity),
+        message,
+      };
+    })
+    .filter((entry): entry is Alert => entry !== null);
+}
+
 export function AlertBanner() {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [alerts, setAlerts] = useState<Alert[]>([]);
 
-  const visible = SAMPLE_ALERTS.filter((a) => !dismissed.has(a.id));
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadAlerts = () => {
+      apiClient.getAlerts()
+        .then((payload) => {
+          if (isMounted) {
+            setAlerts(normalizeAlerts(payload));
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load alerts:', err);
+          if (isMounted) {
+            setAlerts([]);
+          }
+        });
+    };
+
+    loadAlerts();
+    const intervalId = window.setInterval(loadAlerts, 30_000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  const visible = alerts.filter((a) => !dismissed.has(a.id));
 
   if (visible.length === 0) return null;
 

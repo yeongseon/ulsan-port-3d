@@ -54,26 +54,57 @@ async def _upsert_berth(session, item: dict) -> None:  # type: ignore[no-untyped
 
     lat = _to_float(item.get("lat"))
     lon = _to_float(item.get("lon"))
+    zone_name = _extract_zone_name(item)
+    if not zone_name:
+        logger.warning("Skipping berth %s because zone name is missing", facility_code)
+        return
 
     await session.execute(
         text("""
-            INSERT INTO berth (berth_id, facility_code, name, zone_id, length, depth)
-            SELECT
+            INSERT INTO berth (berth_id, facility_code, name, zone_id, length, depth, geometry)
+            VALUES (
                 gen_random_uuid(),
                 :facility_code,
                 :name,
-                (SELECT zone_id FROM port_zone LIMIT 1),
+                (
+                    SELECT zone_id
+                    FROM port_zone
+                    WHERE lower(name) = lower(:zone_name)
+                    LIMIT 1
+                ),
                 :length,
-                :depth
-            WHERE NOT EXISTS (SELECT 1 FROM berth WHERE facility_code = :facility_code)
+                :depth,
+                CASE
+                    WHEN :lat IS NOT NULL AND :lon IS NOT NULL
+                    THEN ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)
+                    ELSE NULL
+                END
+            )
+            ON CONFLICT (facility_code) DO UPDATE SET
+                name = EXCLUDED.name,
+                zone_id = COALESCE(EXCLUDED.zone_id, berth.zone_id),
+                length = EXCLUDED.length,
+                depth = EXCLUDED.depth,
+                geometry = COALESCE(EXCLUDED.geometry, berth.geometry)
         """),
         {
             "facility_code": facility_code,
             "name": item.get("berthName", ""),
+            "zone_name": zone_name,
             "length": _to_float(item.get("berthLength")),
             "depth": _to_float(item.get("berthDepth")),
+            "lat": lat,
+            "lon": lon,
         },
     )
+
+
+def _extract_zone_name(item: dict) -> str | None:
+    for key in ("zoneName", "zone", "harborName", "portZoneName"):
+        value = item.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
 
 
 def _to_float(val) -> float | None:  # type: ignore[no-untyped-def]

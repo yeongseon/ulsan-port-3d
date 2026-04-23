@@ -23,8 +23,12 @@ async def get_entity_graph(
     *,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> EntityGraphResponse:
-    _ = depth
-    return await graph_service.get_entity_graph(db, entity_type=entity_type, entity_id=entity_id)
+    return await graph_service.get_entity_graph(
+        db,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        depth=depth,
+    )
 
 
 @router.get(

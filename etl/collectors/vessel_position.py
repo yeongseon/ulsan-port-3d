@@ -48,6 +48,8 @@ def _extract_items(data: dict) -> list[dict]:
 async def _upsert_position(session, item: dict) -> None:  # type: ignore[no-untyped-def]
     from sqlalchemy import text
 
+    # Position data does not include arrival year or voyage number, so call sign is the
+    # most stable identifier available for matching the AGENTS.md vessel identity convention.
     vessel_id = item.get("callSign", "") or item.get("vesselName", "unknown")
     lat = float(item.get("lat", 0))
     lon = float(item.get("lon", 0))

@@ -12,6 +12,20 @@ router = APIRouter(tags=["vessels"])
 
 
 @router.get(
+    "/vessels",
+    response_model=list[VesselLiveResponse],
+    responses={500: {"model": ProblemDetail}},
+)
+async def get_vessels(
+    zone: str | None = None,
+    ship_type: str | None = None,
+    *,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[VesselLiveResponse]:
+    return await vessel_service.get_live_vessels(db, zone=zone, ship_type=ship_type)
+
+
+@router.get(
     "/vessels/live",
     response_model=list[VesselLiveResponse],
     responses={500: {"model": ProblemDetail}},
