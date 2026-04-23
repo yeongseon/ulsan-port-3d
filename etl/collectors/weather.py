@@ -3,6 +3,7 @@ import logging
 from etl.common import fetch_with_retry, get_http_client, save_raw_snapshot
 from etl.config import etl_settings
 from etl.database import async_session
+from etl.normalizers import extract_items, normalize_tide_items, normalize_weather_items
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +41,11 @@ async def collect_weather() -> None:
         logger.exception("Failed to collect weather data")
 
 
-async def _insert_weather(session, data: dict) -> None:  # type: ignore[no-untyped-def]
+async def _insert_weather(session, data: dict[str, object]) -> None:  # type: ignore[no-untyped-def]
     from sqlalchemy import text
 
-    items = _extract_items(data)
+    raw_items = extract_items(data)
+    items = normalize_weather_items(raw_items)
     for item in items:
         await session.execute(
             text("""
@@ -54,23 +56,24 @@ async def _insert_weather(session, data: dict) -> None:  # type: ignore[no-untyp
                     (:zone, :ws, :wd, :temp, :hum, :pres, :prec, :vis, :wave, NOW())
             """),
             {
-                "zone": item.get("zoneName"),
-                "ws": _to_float(item.get("windSpeed")),
-                "wd": _to_float(item.get("windDir")),
-                "temp": _to_float(item.get("temperature")),
-                "hum": _to_float(item.get("humidity")),
-                "pres": _to_float(item.get("pressure")),
-                "prec": _to_float(item.get("precipitation")),
-                "vis": _to_float(item.get("visibility")),
-                "wave": _to_float(item.get("waveHeight")),
+                "zone": item.get("zone_name"),
+                "ws": item.get("wind_speed"),
+                "wd": item.get("wind_dir"),
+                "temp": item.get("temperature"),
+                "hum": item.get("humidity"),
+                "pres": item.get("pressure"),
+                "prec": item.get("precipitation"),
+                "vis": item.get("visibility"),
+                "wave": item.get("wave_height"),
             },
         )
 
 
-async def _insert_tide(session, data: dict) -> None:  # type: ignore[no-untyped-def]
+async def _insert_tide(session, data: dict[str, object]) -> None:  # type: ignore[no-untyped-def]
     from sqlalchemy import text
 
-    items = _extract_items(data)
+    raw_items = extract_items(data)
+    items = normalize_tide_items(raw_items)
     for item in items:
         await session.execute(
             text("""
@@ -78,27 +81,7 @@ async def _insert_tide(session, data: dict) -> None:  # type: ignore[no-untyped-
                 VALUES (:station, :level, NOW())
             """),
             {
-                "station": item.get("stationName"),
-                "level": _to_float(item.get("tideLevel")),
+                "station": item.get("station_name"),
+                "level": item.get("tide_level"),
             },
         )
-
-
-def _extract_items(data: dict) -> list[dict]:
-    try:
-        body = data.get("response", {}).get("body", {})
-        items = body.get("items", {}).get("item", [])
-        if isinstance(items, dict):
-            items = [items]
-        return items
-    except (AttributeError, TypeError):
-        return []
-
-
-def _to_float(val) -> float | None:  # type: ignore[no-untyped-def]
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return None

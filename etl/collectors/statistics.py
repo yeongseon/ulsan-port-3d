@@ -3,6 +3,7 @@ import logging
 from etl.common import fetch_with_retry, get_http_client, save_raw_snapshot
 from etl.config import etl_settings
 from etl.database import async_session
+from etl.normalizers import extract_items, to_float, to_int
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +41,10 @@ async def collect_statistics() -> None:
         logger.exception("Failed to collect statistics")
 
 
-async def _insert_arrivals(session, data: dict) -> None:  # type: ignore[no-untyped-def]
+async def _insert_arrivals(session, data: dict[str, object]) -> None:  # type: ignore[no-untyped-def]
     from sqlalchemy import text
 
-    for item in _extract_items(data):
+    for item in extract_items(data):
         await session.execute(
             text("""
                 INSERT INTO arrival_stat_monthly (year_month, zone_name, berth_name, vessel_count)
@@ -53,15 +54,15 @@ async def _insert_arrivals(session, data: dict) -> None:  # type: ignore[no-unty
                 "ym": item.get("yearMonth", ""),
                 "zone": item.get("zoneName"),
                 "berth": item.get("berthName"),
-                "count": _to_int(item.get("vesselCount")),
+                "count": to_int(item.get("vesselCount")),
             },
         )
 
 
-async def _insert_liquid_cargo(session, data: dict) -> None:  # type: ignore[no-untyped-def]
+async def _insert_liquid_cargo(session, data: dict[str, object]) -> None:  # type: ignore[no-untyped-def]
     from sqlalchemy import text
 
-    for item in _extract_items(data):
+    for item in extract_items(data):
         await session.execute(
             text("""
                 INSERT INTO cargo_stat_monthly (year_month, zone_name, berth_name, cargo_type, volume_ton)
@@ -72,15 +73,15 @@ async def _insert_liquid_cargo(session, data: dict) -> None:  # type: ignore[no-
                 "zone": item.get("zoneName"),
                 "berth": item.get("berthName"),
                 "cargo": item.get("cargoType"),
-                "vol": _to_float(item.get("volumeTon")),
+                "vol": to_float(item.get("volumeTon")),
             },
         )
 
 
-async def _insert_congestion(session, data: dict) -> None:  # type: ignore[no-untyped-def]
+async def _insert_congestion(session, data: dict[str, object]) -> None:  # type: ignore[no-untyped-def]
     from sqlalchemy import text
 
-    for item in _extract_items(data):
+    for item in extract_items(data):
         await session.execute(
             text("""
                 INSERT INTO congestion_stat (stat_date, waiting_count, avg_wait_hours)
@@ -88,36 +89,7 @@ async def _insert_congestion(session, data: dict) -> None:  # type: ignore[no-un
             """),
             {
                 "date": item.get("statDate", ""),
-                "count": _to_int(item.get("waitingCount")),
-                "hours": _to_float(item.get("avgWaitHours")),
+                "count": to_int(item.get("waitingCount")),
+                "hours": to_float(item.get("avgWaitHours")),
             },
         )
-
-
-def _extract_items(data: dict) -> list[dict]:
-    try:
-        body = data.get("response", {}).get("body", {})
-        items = body.get("items", {}).get("item", [])
-        if isinstance(items, dict):
-            items = [items]
-        return items
-    except (AttributeError, TypeError):
-        return []
-
-
-def _to_float(val) -> float | None:  # type: ignore[no-untyped-def]
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return None
-
-
-def _to_int(val) -> int | None:  # type: ignore[no-untyped-def]
-    if val is None:
-        return None
-    try:
-        return int(val)
-    except (ValueError, TypeError):
-        return None

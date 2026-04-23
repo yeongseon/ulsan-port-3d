@@ -5,6 +5,7 @@ from typing import Any, cast
 from ..common import fetch_with_retry, get_http_client, save_raw_snapshot
 from ..config import etl_settings
 from ..database import async_session
+from ..normalizers import extract_items, to_float
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ async def collect_route_gis() -> None:
 
         save_raw_snapshot("route_gis", data)
 
-        items = _extract_items(data)
+        items = extract_items(data)
         if not items:
             logger.warning("No route GIS items found")
             return
@@ -34,17 +35,6 @@ async def collect_route_gis() -> None:
         logger.info(f"Collected {len(items)} route segments")
     except Exception:
         logger.exception("Failed to collect route GIS data")
-
-
-def _extract_items(data: dict[str, Any]) -> list[dict[str, Any]]:
-    try:
-        body = data.get("response", {}).get("body", {})
-        items = body.get("items", {}).get("item", [])
-        if isinstance(items, dict):
-            items = [items]
-        return items
-    except (AttributeError, TypeError):
-        return []
 
 
 async def _upsert_route(session, item: dict[str, Any]) -> None:  # type: ignore[no-untyped-def]
@@ -85,7 +75,7 @@ async def _upsert_route(session, item: dict[str, Any]) -> None:  # type: ignore[
             "name": name,
             "zone_name": zone_name,
             "geometry_wkt": geometry_wkt,
-            "width": _to_float(item.get("width")),
+            "width": to_float(item.get("width")),
             "direction": item.get("direction"),
         },
     )
@@ -117,10 +107,10 @@ def _build_linestring_wkt(item: dict[str, Any]) -> str | None:
     if lat_lon_pairs:
         return _to_linestring_wkt(lat_lon_pairs)
 
-    start_lat = _to_float(item.get("startLat") or item.get("fromLat"))
-    start_lon = _to_float(item.get("startLon") or item.get("fromLon"))
-    end_lat = _to_float(item.get("endLat") or item.get("toLat"))
-    end_lon = _to_float(item.get("endLon") or item.get("toLon"))
+    start_lat = to_float(item.get("startLat") or item.get("fromLat"))
+    start_lon = to_float(item.get("startLon") or item.get("fromLon"))
+    end_lat = to_float(item.get("endLat") or item.get("toLat"))
+    end_lon = to_float(item.get("endLon") or item.get("toLon"))
     if None not in (start_lat, start_lon, end_lat, end_lon):
         start_lat = cast(float, start_lat)
         start_lon = cast(float, start_lon)
@@ -176,10 +166,10 @@ def _parse_number_list(value: Any) -> list[float] | None:
         if not stripped:
             return None
         parts = [part.strip() for part in stripped.replace(";", ",").split(",")]
-        numbers = [_to_float(part) for part in parts if part]
+        numbers = [to_float(part) for part in parts if part]
         return [number for number in numbers if number is not None] or None
     if isinstance(value, list):
-        numbers = [_to_float(part) for part in value]
+        numbers = [to_float(part) for part in value]
         return [number for number in numbers if number is not None] or None
     return None
 
@@ -191,11 +181,11 @@ def _normalize_pairs(value: Any) -> list[tuple[float, float]] | None:
     pairs: list[tuple[float, float]] = []
     for item in value:
         if isinstance(item, dict):
-            lon = _to_float(item.get("lon") or item.get("x") or item.get("lng"))
-            lat = _to_float(item.get("lat") or item.get("y"))
+            lon = to_float(item.get("lon") or item.get("x") or item.get("lng"))
+            lat = to_float(item.get("lat") or item.get("y"))
         elif isinstance(item, (list, tuple)) and len(item) >= 2:
-            lon = _to_float(item[0])
-            lat = _to_float(item[1])
+            lon = to_float(item[0])
+            lat = to_float(item[1])
         else:
             continue
         if lon is not None and lat is not None:
@@ -214,8 +204,8 @@ def _parse_linestring_wkt(value: str) -> list[tuple[float, float]] | None:
         components = [component for component in part.strip().split() if component]
         if len(components) < 2:
             continue
-        lon = _to_float(components[0])
-        lat = _to_float(components[1])
+        lon = to_float(components[0])
+        lat = to_float(components[1])
         if lon is not None and lat is not None:
             pairs.append((lon, lat))
     return pairs if len(pairs) >= 2 else None
@@ -226,12 +216,3 @@ def _to_linestring_wkt(coordinates: list[tuple[float, float]]) -> str | None:
         return None
     points = ", ".join(f"{lon} {lat}" for lon, lat in coordinates)
     return f"LINESTRING({points})"
-
-
-def _to_float(val) -> float | None:  # type: ignore[no-untyped-def]
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return None

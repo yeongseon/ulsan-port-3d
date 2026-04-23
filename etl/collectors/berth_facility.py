@@ -4,6 +4,8 @@ from typing import Any
 from ..common import fetch_with_retry, get_http_client, save_raw_snapshot
 from ..config import etl_settings
 from ..database import async_session
+from ..normalizers import extract_items, normalize_berth_facility_items
+from ..normalizers.berth import BerthFacilityRecord
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +22,8 @@ async def collect_berth_facilities() -> None:
 
         save_raw_snapshot("berth_facility", data)
 
-        items = _extract_items(data)
+        raw_items = extract_items(data)
+        items = normalize_berth_facility_items(raw_items)
         if not items:
             logger.warning("No berth facility items found")
             return
@@ -35,27 +38,16 @@ async def collect_berth_facilities() -> None:
         logger.exception("Failed to collect berth facilities")
 
 
-def _extract_items(data: dict[str, Any]) -> list[dict[str, Any]]:
-    try:
-        body = data.get("response", {}).get("body", {})
-        items = body.get("items", {}).get("item", [])
-        if isinstance(items, dict):
-            items = [items]
-        return items
-    except (AttributeError, TypeError):
-        return []
-
-
-async def _upsert_berth(session, item: dict[str, Any]) -> None:  # type: ignore[no-untyped-def]
+async def _upsert_berth(session, item: BerthFacilityRecord) -> None:  # type: ignore[no-untyped-def]
     from sqlalchemy import text
 
-    facility_code = item.get("facilityCode", "")
+    facility_code = item.get("facility_code", "")
     if not facility_code:
         return
 
-    lat = _to_float(item.get("lat"))
-    lon = _to_float(item.get("lon"))
-    zone_name = _extract_zone_name(item)
+    lat = item.get("lat")
+    lon = item.get("lon")
+    zone_name = item.get("zone_name")
     if not zone_name:
         logger.warning("Skipping berth %s because zone name is missing", facility_code)
         return
@@ -90,28 +82,11 @@ async def _upsert_berth(session, item: dict[str, Any]) -> None:  # type: ignore[
         """),
         {
             "facility_code": facility_code,
-            "name": item.get("berthName", ""),
+            "name": item.get("name", ""),
             "zone_name": zone_name,
-            "length": _to_float(item.get("berthLength")),
-            "depth": _to_float(item.get("berthDepth")),
+            "length": item.get("length"),
+            "depth": item.get("depth"),
             "lat": lat,
             "lon": lon,
         },
     )
-
-
-def _extract_zone_name(item: dict[str, Any]) -> str | None:
-    for key in ("zoneName", "zone", "harborName", "portZoneName"):
-        value = item.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def _to_float(val) -> float | None:  # type: ignore[no-untyped-def]
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return None

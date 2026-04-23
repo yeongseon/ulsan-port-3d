@@ -20,6 +20,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter frontend type-check
+      - run: pnpm --filter frontend lint
       - run: pnpm --filter frontend build
 
   backend:
@@ -46,6 +47,8 @@ jobs:
       - run: pip install -e ".[dev]"
         working-directory: etl
       - run: ruff check .
+        working-directory: etl
+      - run: pytest tests/
         working-directory: etl
 
   docker:

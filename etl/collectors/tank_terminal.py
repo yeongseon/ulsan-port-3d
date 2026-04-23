@@ -4,6 +4,7 @@ from typing import Any
 from ..common import fetch_with_retry, get_http_client, save_raw_snapshot
 from ..config import etl_settings
 from ..database import async_session
+from ..normalizers import extract_items, to_float, to_int
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ async def collect_tank_terminals() -> None:
 
         save_raw_snapshot("tank_terminal", data)
 
-        items = _extract_items(data)
+        items = extract_items(data)
         if not items:
             logger.warning("No tank terminal items found")
             return
@@ -33,17 +34,6 @@ async def collect_tank_terminals() -> None:
         logger.info(f"Collected {len(items)} tank terminals")
     except Exception:
         logger.exception("Failed to collect tank terminal data")
-
-
-def _extract_items(data: dict[str, Any]) -> list[dict[str, Any]]:
-    try:
-        body = data.get("response", {}).get("body", {})
-        items = body.get("items", {}).get("item", [])
-        if isinstance(items, dict):
-            items = [items]
-        return items
-    except (AttributeError, TypeError):
-        return []
 
 
 async def _upsert_terminal(session, item: dict[str, Any]) -> None:  # type: ignore[no-untyped-def]
@@ -85,8 +75,8 @@ async def _upsert_terminal(session, item: dict[str, Any]) -> None:  # type: igno
             "name": name,
             "zone_name": zone_name,
             "operator_name": item.get("operatorName"),
-            "capacity": _to_float(item.get("capacity")),
-            "count": _to_int(item.get("tankCount")),
+            "capacity": to_float(item.get("capacity")),
+            "count": to_int(item.get("tankCount")),
         },
     )
 
@@ -131,21 +121,3 @@ def _resolve_zone_name(item: dict[str, Any]) -> str | None:
         if keyword.lower() in lowered:
             return zone_name
     return None
-
-
-def _to_float(val) -> float | None:  # type: ignore[no-untyped-def]
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return None
-
-
-def _to_int(val) -> int | None:  # type: ignore[no-untyped-def]
-    if val is None:
-        return None
-    try:
-        return int(val)
-    except (ValueError, TypeError):
-        return None

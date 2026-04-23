@@ -3,6 +3,7 @@ import logging
 from etl.common import fetch_with_retry, get_http_client, save_raw_snapshot
 from etl.config import etl_settings
 from etl.database import async_session
+from etl.normalizers import clean_string, extract_items
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ async def collect_berth_status() -> None:
 
         save_raw_snapshot("berth_status", data)
 
-        items = _extract_items(data)
+        items = extract_items(data)
         if not items:
             logger.warning("No berth status items found")
             return
@@ -41,25 +42,14 @@ async def collect_berth_status() -> None:
         logger.exception("Failed to collect berth status")
 
 
-def _extract_items(data: dict) -> list[dict]:
-    try:
-        body = data.get("response", {}).get("body", {})
-        items = body.get("items", {}).get("item", [])
-        if isinstance(items, dict):
-            items = [items]
-        return items
-    except (AttributeError, TypeError):
-        return []
-
-
-async def _upsert_status(session, item: dict) -> None:  # type: ignore[no-untyped-def]
+async def _upsert_status(session, item: dict[str, object]) -> None:  # type: ignore[no-untyped-def]
     from sqlalchemy import text
 
     facility_code = item.get("facilityCode", "")
     if not facility_code:
         return
 
-    status_kr = item.get("status", "확인중")
+    status_kr = clean_string(item.get("status")) or "확인중"
     status = STATUS_MAP.get(status_kr, "checking")
 
     await session.execute(
