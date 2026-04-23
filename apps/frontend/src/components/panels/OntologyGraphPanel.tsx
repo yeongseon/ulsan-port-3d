@@ -6,7 +6,7 @@ import { useMapStore } from '@/stores/mapStore';
 interface GraphNode {
   id: string;
   label: string;
-  type: 'vessel' | 'berth' | 'operator' | 'zone';
+  type: GraphNodeType;
   x?: number;
   y?: number;
   vx?: number;
@@ -24,13 +24,42 @@ type GraphPayload = {
   edges: GraphEdge[];
 };
 
-type GraphNodeType = GraphNode['type'];
+type GraphNodeType =
+  | 'vessel'
+  | 'berth'
+  | 'operator'
+  | 'zone'
+  | 'cargo'
+  | 'document'
+  | 'observation'
+  | 'infrastructure'
+  | 'event'
+  | 'status';
 
 const NODE_COLORS: Record<GraphNodeType, string> = {
   vessel: '#3b82f6',
   berth: '#22c55e',
   operator: '#f59e0b',
   zone: '#a78bfa',
+  cargo: '#ec4899',
+  document: '#6b7280',
+  observation: '#06b6d4',
+  infrastructure: '#14b8a6',
+  event: '#f97316',
+  status: '#ef4444',
+};
+
+const NODE_TYPE_LABELS: Record<GraphNodeType, string> = {
+  vessel: '선박',
+  berth: '부두',
+  operator: '운영사',
+  zone: '구역',
+  cargo: '화물',
+  document: '문서',
+  observation: '관측',
+  infrastructure: '시설',
+  event: '이벤트',
+  status: '상태',
 };
 
 const W = 360;
@@ -60,12 +89,31 @@ function getEdgesContainer(value: unknown): unknown[] {
   return Array.isArray(nested) ? nested : [];
 }
 
+const BACKEND_TYPE_MAP: Record<string, GraphNodeType> = {
+  vessel: 'vessel',
+  vesselposition: 'vessel',
+  berth: 'berth',
+  berthstatus: 'status',
+  operator: 'operator',
+  zone: 'zone',
+  portzone: 'zone',
+  port: 'zone',
+  cargotype: 'cargo',
+  cargostatmonthly: 'cargo',
+  buoy: 'infrastructure',
+  routesegment: 'infrastructure',
+  tankterminal: 'infrastructure',
+  weatherobservation: 'observation',
+  tideobservation: 'observation',
+  hazarddoc: 'document',
+  msdsdoc: 'document',
+  alert: 'event',
+  vesselevent: 'event',
+};
+
 function toGraphNodeType(value: unknown): GraphNodeType {
   const v = typeof value === 'string' ? value.toLowerCase() : '';
-  if (v === 'berth') return 'berth';
-  if (v === 'operator') return 'operator';
-  if (v === 'zone' || v === 'portzone') return 'zone';
-  return 'vessel';
+  return BACKEND_TYPE_MAP[v] ?? 'vessel';
 }
 
 function normalizeGraphNode(entry: unknown): GraphNode | null {
@@ -342,7 +390,7 @@ export function OntologyGraphPanel() {
         {Object.entries(NODE_COLORS).map(([type, color]) => (
           <div key={type} className="flex items-center gap-1 text-xs text-port-muted">
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-            {type === 'vessel' ? '선박' : type === 'berth' ? '부두' : type === 'operator' ? '운영사' : '구역'}
+            {NODE_TYPE_LABELS[type as GraphNodeType] ?? type}
           </div>
         ))}
       </div>
