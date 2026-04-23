@@ -2,9 +2,9 @@ import logging
 import json
 from typing import Any, cast
 
-from etl.common import fetch_with_retry, get_http_client, save_raw_snapshot
-from etl.config import etl_settings
-from etl.database import async_session
+from ..common import fetch_with_retry, get_http_client, save_raw_snapshot
+from ..config import etl_settings
+from ..database import async_session
 
 logger = logging.getLogger(__name__)
 

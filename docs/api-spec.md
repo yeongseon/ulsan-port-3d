@@ -101,6 +101,24 @@ Array of zone objects:
 
 ## Vessels
 
+### `GET /api/v1/vessels`
+
+Returns all known vessels (same schema as `/vessels/live`).
+
+- Query params:
+  - `zone: string | null`
+  - `ship_type: string | null`
+- Request body: none
+
+#### Response `200 OK`
+
+Same response format as `GET /api/v1/vessels/live`.
+
+#### Status Codes
+
+- `200 OK`
+- `500 Internal Server Error` (`ProblemDetail`)
+
 ### `GET /api/v1/vessels/live`
 
 Returns the latest live vessel positions.
@@ -231,6 +249,25 @@ Returns berth inventory and latest berth state.
 #### Status Codes
 
 - `200 OK`
+- `500 Internal Server Error` (`ProblemDetail`)
+
+### `GET /api/v1/berths/{berth_id}`
+
+Returns a single berth detail (same schema as items in `GET /api/v1/berths`).
+
+- Path params:
+  - `berth_id: string` — UUID or facility code
+- Query params: none
+- Request body: none
+
+#### Response `200 OK`
+
+Same object shape as a single item in the `GET /api/v1/berths` array response.
+
+#### Status Codes
+
+- `200 OK`
+- `404 Not Found` (`ProblemDetail`)
 - `500 Internal Server Error` (`ProblemDetail`)
 
 ### `GET /api/v1/berth-status/live`
@@ -802,24 +839,26 @@ The current router set defines the following backend entry points:
 1. `GET /health`
 2. `GET /api/v1/port/overview`
 3. `GET /api/v1/zones`
-4. `GET /api/v1/vessels/live`
-5. `GET /api/v1/vessels/{vessel_id}`
-6. `GET /api/v1/berths`
-7. `GET /api/v1/berth-status/live`
-8. `GET /api/v1/weather/current`
-9. `GET /api/v1/weather/forecast`
-10. `GET /api/v1/stats/arrivals`
-11. `GET /api/v1/stats/liquid-cargo`
-12. `GET /api/v1/stats/congestion`
-13. `GET /api/v1/docs/hazard`
-14. `GET /api/v1/docs/msds`
-15. `GET /api/v1/scenarios`
-16. `GET /api/v1/scenarios/{scenario_id}/frames`
-17. `GET /api/v1/graph/{entity_type}/{entity_id}`
-18. `GET /api/v1/graph/explore`
-19. `WS /api/v1/ws/events`
-20. `GET /api/v1/insights/current`
-21. `GET /api/v1/alerts`
-22. `POST /api/v1/alerts/evaluate`
+4. `GET /api/v1/vessels`
+5. `GET /api/v1/vessels/live`
+6. `GET /api/v1/vessels/{vessel_id}`
+7. `GET /api/v1/berths`
+8. `GET /api/v1/berths/{berth_id}`
+9. `GET /api/v1/berth-status/live`
+10. `GET /api/v1/weather/current`
+11. `GET /api/v1/weather/forecast`
+12. `GET /api/v1/stats/arrivals`
+13. `GET /api/v1/stats/liquid-cargo`
+14. `GET /api/v1/stats/congestion`
+15. `GET /api/v1/docs/hazard`
+16. `GET /api/v1/docs/msds`
+17. `GET /api/v1/scenarios`
+18. `GET /api/v1/scenarios/{scenario_id}/frames`
+19. `GET /api/v1/graph/{entity_type}/{entity_id}`
+20. `GET /api/v1/graph/explore`
+21. `WS /api/v1/ws/events`
+22. `GET /api/v1/insights/current`
+23. `GET /api/v1/alerts`
+24. `POST /api/v1/alerts/evaluate`
 
 This specification should be updated whenever router signatures, schema models, or version prefixes change.

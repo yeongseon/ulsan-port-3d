@@ -1,8 +1,9 @@
 import logging
+from typing import Any
 
-from etl.common import fetch_with_retry, get_http_client, save_raw_snapshot
-from etl.config import etl_settings
-from etl.database import async_session
+from ..common import fetch_with_retry, get_http_client, save_raw_snapshot
+from ..config import etl_settings
+from ..database import async_session
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ async def collect_tank_terminals() -> None:
         logger.exception("Failed to collect tank terminal data")
 
 
-def _extract_items(data: dict) -> list[dict]:
+def _extract_items(data: dict[str, Any]) -> list[dict[str, Any]]:
     try:
         body = data.get("response", {}).get("body", {})
         items = body.get("items", {}).get("item", [])
@@ -45,7 +46,7 @@ def _extract_items(data: dict) -> list[dict]:
         return []
 
 
-async def _upsert_terminal(session, item: dict) -> None:  # type: ignore[no-untyped-def]
+async def _upsert_terminal(session, item: dict[str, Any]) -> None:  # type: ignore[no-untyped-def]
     from sqlalchemy import text
 
     name = item.get("terminalName", "")
@@ -101,7 +102,7 @@ async def _upsert_terminal(session, item: dict) -> None:  # type: ignore[no-unty
         )
 
 
-def _resolve_zone_name(item: dict) -> str | None:
+def _resolve_zone_name(item: dict[str, Any]) -> str | None:
     for key in ("zoneName", "zone", "harborName", "portZoneName"):
         value = item.get(key)
         if isinstance(value, str) and value.strip():

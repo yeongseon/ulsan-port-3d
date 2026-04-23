@@ -51,8 +51,8 @@ function normalizeArrivals(payload: unknown): ArrivalDatum[] {
       if (!isRecord(entry)) return null;
 
       return {
-        hour: getString(entry.hour ?? entry.time ?? entry.label, '00'),
-        arrivals: getNumber(entry.arrivals ?? entry.value ?? entry.count),
+        hour: getString(entry.hour ?? entry.year_month ?? entry.time ?? entry.label, '00'),
+        arrivals: getNumber(entry.arrivals ?? entry.vessel_count ?? entry.value ?? entry.count),
       };
     })
     .filter((entry): entry is ArrivalDatum => entry !== null);
@@ -64,8 +64,8 @@ function normalizeCongestion(payload: unknown): CongestionDatum[] {
       if (!isRecord(entry)) return null;
 
       return {
-        time: getString(entry.time ?? entry.hour ?? entry.label, '00:00'),
-        value: getNumber(entry.value ?? entry.congestion ?? entry.rate),
+        time: getString(entry.time ?? entry.stat_date ?? entry.hour ?? entry.label, '00:00'),
+        value: getNumber(entry.value ?? entry.waiting_count ?? entry.avg_wait_hours ?? entry.congestion ?? entry.rate),
       };
     })
     .filter((entry): entry is CongestionDatum => entry !== null);

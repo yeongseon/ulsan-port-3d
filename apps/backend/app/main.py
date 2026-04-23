@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from typing import Any, cast
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -50,9 +51,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.add_exception_handler(ProblemHTTPException, problem_exception_handler)
-app.add_exception_handler(StarletteHTTPException, http_exception_handler)
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(ProblemHTTPException, cast(Any, problem_exception_handler))
+app.add_exception_handler(StarletteHTTPException, cast(Any, http_exception_handler))
+app.add_exception_handler(RequestValidationError, cast(Any, validation_exception_handler))
 
 app.include_router(health.router)
 app.include_router(port.router, prefix="/api/v1")

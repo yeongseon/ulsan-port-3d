@@ -24,7 +24,7 @@ async def fetch_with_retry(
     params: Mapping[str, str | int | float | bool] | None = None,
     max_retries: int | None = None,
 ) -> httpx.Response:
-    retries = max_retries if max_retries is not None else etl_settings.max_retries
+    retries: int = max_retries if max_retries is not None else etl_settings.max_retries
     last_error: Exception | None = None
 
     for attempt in range(retries):
@@ -34,7 +34,7 @@ async def fetch_with_retry(
             return response
         except (httpx.HTTPStatusError, httpx.RequestError) as e:
             last_error = e
-            wait: int = 2**attempt
+            wait = 1 << attempt
             logger.warning(
                 f"Attempt {attempt + 1}/{retries} failed for {url}: {e}. Retrying in {wait}s"
             )

@@ -91,8 +91,36 @@ function normalizeGraphEdge(entry: unknown): GraphEdge | null {
   };
 }
 
+function normalizeEntityGraphResponse(payload: Record<string, unknown>): GraphPayload {
+  const center = normalizeGraphNode(payload.center);
+  if (!center) return { nodes: [], edges: [] };
+
+  const relations = Array.isArray(payload.relations) ? payload.relations : [];
+  const nodes: GraphNode[] = [center];
+  const edges: GraphEdge[] = [];
+
+  for (const rel of relations) {
+    if (!isRecord(rel)) continue;
+    const relNode = normalizeGraphNode(rel.node);
+    if (!relNode) continue;
+    nodes.push(relNode);
+    edges.push({
+      source: center.id,
+      target: relNode.id,
+      label: getString(rel.predicate, ''),
+    });
+  }
+
+  return { nodes, edges };
+}
+
 function normalizeGraphPayload(payload: unknown): GraphPayload {
   const source = isRecord(payload) && isRecord(payload.data) ? payload.data : payload;
+
+  // Handle EntityGraphResponse shape (center + relations)
+  if (isRecord(source) && 'center' in source && 'relations' in source) {
+    return normalizeEntityGraphResponse(source);
+  }
 
   return {
     nodes: getNodesContainer(source).map(normalizeGraphNode).filter((node): node is GraphNode => node !== null),
@@ -191,7 +219,9 @@ export function OntologyGraphPanel() {
     let isMounted = true;
     setIsLoading(true);
 
-    apiClient.getGraph(graphTarget.type, graphTarget.id)
+    const TYPE_MAP: Record<string, string> = { vessel: 'Vessel', berth: 'Berth', operator: 'Operator', zone: 'Zone' };
+    const backendType = TYPE_MAP[graphTarget.type] ?? graphTarget.type;
+    apiClient.getGraph(backendType, graphTarget.id)
       .then((payload) => {
         if (!isMounted) return;
 

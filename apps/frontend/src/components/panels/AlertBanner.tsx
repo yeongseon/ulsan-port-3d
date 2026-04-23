@@ -28,7 +28,9 @@ function getString(value: unknown, fallback = ''): string {
 }
 
 function toAlertLevel(value: unknown): Alert['level'] {
-  return value === 'warning' || value === 'danger' ? value : 'info';
+  if (value === 'warning') return 'warning';
+  if (value === 'danger' || value === 'critical') return 'danger';
+  return 'info';
 }
 
 function normalizeAlerts(payload: unknown): Alert[] {

@@ -27,7 +27,21 @@ const http = axios.create({
 });
 
 export const apiClient = {
-  getVessels: () => http.get<Vessel[]>('/vessels').then((r) => r.data),
+  getVessels: () =>
+    http.get('/vessels').then((r) =>
+      (Array.isArray(r.data) ? r.data : []).map((v: Record<string, unknown>) => ({
+        vessel_id: String(v.vessel_id ?? ''),
+        name: String(v.name ?? ''),
+        call_sign: String(v.call_sign ?? ''),
+        lat: Number(v.lat ?? 0),
+        lon: Number(v.lon ?? 0),
+        speed: Number(v.speed ?? 0),
+        course: Number(v.course ?? 0),
+        heading: Number(v.heading ?? 0),
+        ship_type: String(v.ship_type ?? ''),
+        updated_at: String(v.updated_at ?? v.observed_at ?? new Date().toISOString()),
+      } as Vessel)),
+    ),
   getBerths: () =>
     http.get<BackendBerth[]>('/berths').then((r) =>
       r.data.map(
@@ -63,8 +77,39 @@ export const apiClient = {
         observed_at: obs.observed_at ?? new Date().toISOString(),
       } as WeatherData;
     }),
-  getVesselById: (id: string) => http.get<Vessel>(`/vessels/${id}`).then((r) => r.data),
-  getBerthById: (id: string) => http.get<Berth>(`/berths/${id}`).then((r) => r.data),
+  getVesselById: (id: string) =>
+    http.get(`/vessels/${id}`).then((r) => {
+      const d = r.data as Record<string, unknown>;
+      const pos = (d.latest_position ?? d) as Record<string, unknown>;
+      return {
+        vessel_id: String(pos.vessel_id ?? d.vessel_id ?? ''),
+        name: String(pos.name ?? ''),
+        call_sign: String(pos.call_sign ?? ''),
+        lat: Number(pos.lat ?? 0),
+        lon: Number(pos.lon ?? 0),
+        speed: Number(pos.speed ?? 0),
+        course: Number(pos.course ?? 0),
+        heading: Number(pos.heading ?? 0),
+        ship_type: String(pos.ship_type ?? ''),
+        updated_at: String(pos.updated_at ?? pos.observed_at ?? new Date().toISOString()),
+      } as Vessel;
+    }),
+  getBerthById: (id: string) =>
+    http.get<BackendBerth>(`/berths/${id}`).then((r) => {
+      const b = r.data;
+      return {
+        berth_id: b.berth_id,
+        facility_code: b.facility_code,
+        name: b.name,
+        zone: b.zone_name ?? '',
+        status: toBerthStatus(b.latest_status),
+        operator: b.operator_name ?? '',
+        length: b.length ?? 0,
+        depth: b.depth ?? 0,
+        lat: b.latitude ?? 0,
+        lon: b.longitude ?? 0,
+      } as Berth;
+    }),
   getInsights: () => http.get('/insights/current').then((r) => r.data),
   getAlerts: () => http.get('/alerts').then((r) => r.data),
   getScenarios: () => http.get('/scenarios').then((r) => r.data),

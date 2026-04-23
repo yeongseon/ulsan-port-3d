@@ -510,13 +510,32 @@ async def get_entity_graph(
     db: AsyncSession, *, entity_type: str, entity_id: str, depth: int = 1
 ) -> EntityGraphResponse:
     center = await _load_default(db, entity_type, entity_id)
-    _ = depth
-    related = await _get_related_nodes(db, entity_type, center.id)
+    max_depth = max(1, min(depth, 3))
+
+    all_relations: list[RelatedNode] = []
+    visited: set[tuple[str, str]] = {(center.type, center.id)}
+    queue: deque[tuple[GraphNode, int]] = deque([(center, 0)])
+
+    while queue:
+        current, current_depth = queue.popleft()
+        if current_depth >= max_depth:
+            continue
+
+        related = await _get_related_nodes(db, current.type, current.id)
+        for item in related:
+            node_key = (item.node.type, item.node.id)
+            if node_key in visited:
+                continue
+            visited.add(node_key)
+            all_relations.append(item)
+            if current_depth + 1 < max_depth:
+                queue.append((item.node, current_depth + 1))
+
     return EntityGraphResponse(
         center=center,
         relations=[
             EntityGraphRelation(predicate=item.predicate, direction=item.direction, node=item.node)
-            for item in related
+            for item in all_relations
         ],
     )
 
