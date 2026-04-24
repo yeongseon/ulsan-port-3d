@@ -34,7 +34,12 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - name: Install dependencies
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build frontend with mock data
@@ -42,13 +47,25 @@ jobs:
         env:
           VITE_USE_MOCK: 'true'
 
+      - name: Install MkDocs dependencies
+        run: pip install mkdocs-material mkdocs-mermaid2-plugin
+
+      - name: Build MkDocs documentation
+        run: mkdocs build --site-dir site
+
+      - name: Merge frontend + docs into deploy directory
+        run: |
+          mkdir -p _deploy
+          cp -r apps/frontend/dist/* _deploy/
+          cp -r site _deploy/docs
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: apps/frontend/dist
+          path: _deploy
 
       - name: Deploy to GitHub Pages
         id: deployment

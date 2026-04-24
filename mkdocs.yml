@@ -1,0 +1,89 @@
+site_name: 울산항 3D 관제 시스템
+site_description: 울산항 공공데이터 기반 온톨로지 3D 관제 시스템 — 2026 스마트해운물류 × ICT 멘토링
+site_url: https://yeongseon.github.io/ulsan-port-3d/docs/
+site_author: Team ulsan-port-3d
+
+repo_name: yeongseon/ulsan-port-3d
+repo_url: https://github.com/yeongseon/ulsan-port-3d
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: ko
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: 다크 모드로 전환
+    - scheme: slate
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: 라이트 모드로 전환
+  font:
+    text: Noto Sans KR
+    code: JetBrains Mono
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search:
+      lang:
+        - ko
+        - en
+  - mermaid2
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - 홈: index.md
+  - 한글 문서:
+      - 프로젝트 소개서: project-overview-ko.md
+      - 시스템 아키텍처: architecture-ko.md
+  - 영문 문서 (English):
+      - Product Requirements: prd.md
+      - Ontology Reference: ontology.md
+      - API Specification: api-spec.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/yeongseon/ulsan-port-3d
+  generator: false
