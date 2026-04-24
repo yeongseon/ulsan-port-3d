@@ -2,6 +2,7 @@ import { Suspense, memo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, PerspectiveCamera } from '@react-three/drei';
 import { SeaPlane } from './SeaPlane';
+import { LandMass } from './LandMass';
 import { PortGeometry } from './PortGeometry';
 import { VesselLayer } from './VesselLayer';
 import { BerthStatusLayer } from './BerthStatusLayer';
@@ -33,6 +34,7 @@ const StaticScene = memo(function StaticScene() {
       <Environment preset="city" />
 
       <SeaPlane />
+      <LandMass />
       <PortGeometry />
     </>
   );
