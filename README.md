@@ -133,6 +133,8 @@ Additional project documentation lives in `docs/`:
 - Product requirements: [`docs/prd.md`](docs/prd.md)
 - Ontology reference: [`docs/ontology.md`](docs/ontology.md)
 - API specification: [`docs/api-spec.md`](docs/api-spec.md)
+- 프로젝트 소개서 (한글): [`docs/project-overview-ko.md`](docs/project-overview-ko.md)
+- 시스템 아키텍처 (한글): [`docs/architecture-ko.md`](docs/architecture-ko.md)
 
 During local runtime, interactive backend API docs are also available from FastAPI at `/docs`.
 
