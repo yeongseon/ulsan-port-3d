@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Vessel } from '@/stores/dataStore';
@@ -79,19 +78,17 @@ function createHullShape(length: number, beam: number, bowTaper: number): THREE.
   return shape;
 }
 
-function useShipGeometries(cfg: ShipConfig) {
-  return useMemo(() => {
-    const hullShape = createHullShape(cfg.length, cfg.beam, cfg.bowTaper);
-    const hullGeo = new THREE.ExtrudeGeometry(hullShape, {
+const HULL_GEOMETRIES: Record<string, THREE.ExtrudeGeometry> = Object.fromEntries(
+  Object.entries({ ...SHIP_CONFIGS, default: DEFAULT_CONFIG }).map(([key, cfg]) => {
+    const geo = new THREE.ExtrudeGeometry(createHullShape(cfg.length, cfg.beam, cfg.bowTaper), {
       depth: cfg.hullHeight,
       bevelEnabled: false,
     });
     // Extrude along Y axis
-    hullGeo.rotateX(-Math.PI / 2);
-
-    return { hullGeo };
-  }, [cfg.length, cfg.beam, cfg.bowTaper, cfg.hullHeight]);
-}
+    geo.rotateX(-Math.PI / 2);
+    return [key, geo];
+  }),
+) as Record<string, THREE.ExtrudeGeometry>;
 
 function ContainerStacks({ cfg, color }: { cfg: ShipConfig; color: string }) {
   const halfL = cfg.length / 2;
@@ -156,11 +153,13 @@ function TankDomes({ cfg, color }: { cfg: ShipConfig; color: string }) {
 function VesselMarker({ vessel }: { vessel: Vessel }) {
   const selectEntity = useMapStore((s) => s.selectEntity);
 
-  const pos = latLonToLocal(vessel.lat, vessel.lon, 5);
+  const pos = latLonToLocal(vessel.lat, vessel.lon, 0);
   const color = TYPE_COLORS[vessel.ship_type] ?? TYPE_COLORS.default;
+  // AIS heading: 0°=north, 90°=east. Ship mesh points +X. Convert to R3F Y-rotation.
   const headingRad = ((vessel.heading ?? 0) * Math.PI) / 180;
+  const yaw = Math.PI / 2 - headingRad;
   const cfg = SHIP_CONFIGS[vessel.ship_type] ?? DEFAULT_CONFIG;
-  const { hullGeo } = useShipGeometries(cfg);
+  const hullGeo = HULL_GEOMETRIES[vessel.ship_type] ?? HULL_GEOMETRIES.default;
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
@@ -171,12 +170,12 @@ function VesselMarker({ vessel }: { vessel: Vessel }) {
   const bridgeX = -halfL + cfg.length * cfg.bridgePos;
 
   return (
-    <group position={[pos.x, pos.y, pos.z]} rotation={[0, -headingRad, 0]}>
-      <mesh geometry={hullGeo} onPointerUp={handleClick} castShadow receiveShadow>
-        <meshStandardMaterial color={color} roughness={0.5} metalness={0.3} />
+    <group position={[pos.x, 0, pos.z]} rotation={[0, yaw, 0]} onPointerUp={handleClick}>
+      <mesh geometry={hullGeo} castShadow receiveShadow dispose={null}>
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.08} roughness={0.5} metalness={0.3} />
       </mesh>
 
-      <mesh position={[0, cfg.hullHeight * 0.15, 0]} onPointerUp={handleClick}>
+      <mesh position={[0, cfg.hullHeight * 0.15, 0]}>
         <boxGeometry args={[cfg.length * 0.92, cfg.hullHeight * 0.3, cfg.beam * 0.98]} />
         <meshStandardMaterial color="#991b1b" roughness={0.7} metalness={0.2} />
       </mesh>
@@ -203,8 +202,6 @@ function VesselMarker({ vessel }: { vessel: Vessel }) {
 
       {cfg.deckDetails === 'containers' && <ContainerStacks cfg={cfg} color={color} />}
       {cfg.deckDetails === 'tanks' && <TankDomes cfg={cfg} color={color} />}
-
-      <pointLight color={color} intensity={0.3} distance={15} />
     </group>
   );
 }

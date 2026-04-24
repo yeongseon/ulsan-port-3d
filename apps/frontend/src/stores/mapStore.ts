@@ -13,7 +13,7 @@ interface MapState {
 }
 
 export const useMapStore = create<MapState>((set) => ({
-  cameraPosition: [0, 500, 800],
+  cameraPosition: [0, 40, 60],
   activeLayerIds: ['vessels', 'berths', 'weather'],
   selectedEntityId: null,
   selectedEntityType: null,

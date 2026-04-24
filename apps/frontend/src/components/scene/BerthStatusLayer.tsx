@@ -2,6 +2,7 @@ import { ThreeEvent } from '@react-three/fiber';
 import type { Berth } from '@/stores/dataStore';
 import { latLonToLocal } from '@/utils/coordinates';
 import { useMapStore } from '@/stores/mapStore';
+import { PORT_LAYOUT_BY_FACILITY } from './portLayout';
 
 const STATUS_COLORS: Record<Berth['status'], string> = {
   normal: '#22c55e',
@@ -12,8 +13,9 @@ const STATUS_COLORS: Record<Berth['status'], string> = {
 
 function BerthMarker({ berth }: { berth: Berth }) {
   const selectEntity = useMapStore((s) => s.selectEntity);
-  const pos = latLonToLocal(berth.lat, berth.lon, 1);
+  const pos = latLonToLocal(berth.lat, berth.lon, 0);
   const color = STATUS_COLORS[berth.status];
+  const layout = PORT_LAYOUT_BY_FACILITY[berth.facility_code];
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
@@ -21,18 +23,20 @@ function BerthMarker({ berth }: { berth: Berth }) {
   };
 
   return (
-    <group position={[pos.x, pos.y, pos.z]}>
-      <mesh onPointerUp={handleClick}>
-        <boxGeometry args={[3, 0.5, 2]} />
+    <group
+      position={[pos.x, 0, pos.z]}
+      rotation={[0, layout?.rotation ?? 0, 0]}
+    >
+      <mesh position={[0, 0.5, 0]} onPointerUp={handleClick}>
+        <boxGeometry args={[layout?.length ?? 3, 0.24, layout?.width ?? 0.8]} />
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={0.3}
+          emissiveIntensity={0.45}
           transparent
           opacity={0.85}
         />
       </mesh>
-      <pointLight color={color} intensity={0.8} distance={15} decay={2} />
     </group>
   );
 }

@@ -1,6 +1,6 @@
-import { Suspense } from 'react';
+import { Suspense, memo } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment } from '@react-three/drei';
+import { OrbitControls, Environment, PerspectiveCamera } from '@react-three/drei';
 import { SeaPlane } from './SeaPlane';
 import { PortGeometry } from './PortGeometry';
 import { VesselLayer } from './VesselLayer';
@@ -9,12 +9,7 @@ import { RouteLayer } from './RouteLayer';
 import { useDataStore } from '@/stores/dataStore';
 import { useMapStore } from '@/stores/mapStore';
 
-function SceneContent() {
-  const vessels = useDataStore((s) => s.vessels);
-  const berths = useDataStore((s) => s.berths);
-  const activeLayerIds = useMapStore((s) => s.activeLayerIds);
-  const cameraPosition = useMapStore((s) => s.cameraPosition);
-
+const StaticScene = memo(function StaticScene() {
   return (
     <>
       <color attach="background" args={['#e8f4f8']} />
@@ -26,6 +21,12 @@ function SceneContent() {
         intensity={1.5}
         castShadow
         shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-80}
+        shadow-camera-right={80}
+        shadow-camera-top={80}
+        shadow-camera-bottom={-80}
+        shadow-camera-near={1}
+        shadow-camera-far={400}
       />
       <pointLight position={[0, 80, 0]} intensity={0.3} color="#87ceeb" />
 
@@ -33,10 +34,29 @@ function SceneContent() {
 
       <SeaPlane />
       <PortGeometry />
+    </>
+  );
+});
 
+function DynamicLayers() {
+  const vessels = useDataStore((s) => s.vessels);
+  const berths = useDataStore((s) => s.berths);
+  const activeLayerIds = useMapStore((s) => s.activeLayerIds);
+
+  return (
+    <>
       {activeLayerIds.includes('berths') && <BerthStatusLayer berths={berths} />}
       {activeLayerIds.includes('vessels') && <VesselLayer vessels={vessels} />}
       {activeLayerIds.includes('routes') && <RouteLayer />}
+    </>
+  );
+}
+
+function SceneContent() {
+  return (
+    <>
+      <StaticScene />
+      <DynamicLayers />
 
       <OrbitControls
         enablePan
@@ -48,15 +68,9 @@ function SceneContent() {
         target={[0, 0, 0]}
       />
 
-      <gridHelper
-        args={[2000, 100, '#c8d6e5', '#dfe6ed']}
-        position={[0, 0.1, 0]}
-      />
-
-      <axesHelper args={[50]} />
-
-      <perspectiveCamera
-        position={cameraPosition}
+      <PerspectiveCamera
+        makeDefault
+        position={[0, 40, 60]}
         fov={55}
         near={0.5}
         far={3000}
