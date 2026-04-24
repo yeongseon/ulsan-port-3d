@@ -57,7 +57,7 @@ function PortMonitorApp() {
   }, [handleWsMessage]);
 
   return (
-    <div className="h-screen w-screen bg-port-bg text-white flex flex-col overflow-hidden">
+    <div className="h-screen w-screen bg-port-bg text-gray-900 flex flex-col overflow-hidden">
       <Header />
       <MainLayout />
     </div>

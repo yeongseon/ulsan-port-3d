@@ -20,11 +20,11 @@ export function SeaPlane() {
     <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
       <planeGeometry args={[2000, 2000, 64, 64]} />
       <meshStandardMaterial
-        color="#062a4e"
-        roughness={0.1}
-        metalness={0.6}
+        color="#4a9ece"
+        roughness={0.2}
+        metalness={0.3}
         transparent
-        opacity={0.92}
+        opacity={0.85}
       />
     </mesh>
   );

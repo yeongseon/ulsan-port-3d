@@ -242,7 +242,7 @@ export function MainLayout() {
                 className={`flex-1 py-2 text-xs transition-colors ${
                   leftTab === tab.id
                     ? 'text-port-accent border-b-2 border-port-accent'
-                    : 'text-port-muted hover:text-white'
+                    : 'text-port-muted hover:text-gray-900'
                 }`}
               >
                 {tab.label}
@@ -298,7 +298,7 @@ export function MainLayout() {
           <select
             value={selectedScenarioId ?? ''}
             onChange={(e) => setSelectedScenarioId(e.target.value || null)}
-            className="max-w-48 bg-port-bg border border-port-border rounded px-2 py-1 text-xs text-white"
+            className="max-w-48 bg-port-bg border border-port-border rounded px-2 py-1 text-xs text-gray-900"
           >
             <option value="">시나리오 선택</option>
             {scenarios.map((scenario) => (
@@ -327,7 +327,7 @@ export function MainLayout() {
           <button
             type="button"
             onClick={toggleBottomPanel}
-            className="text-xs text-port-muted hover:text-white transition-colors"
+            className="text-xs text-port-muted hover:text-gray-900 transition-colors"
           >
             {bottomPanelOpen ? '▼ 타임라인 접기' : '▲ 타임라인 펼치기'}
           </button>
@@ -339,7 +339,7 @@ export function MainLayout() {
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs text-port-muted">시나리오 재생</p>
-                  <p className="text-sm text-white">{selectedScenario?.name ?? '선택된 시나리오 없음'}</p>
+                  <p className="text-sm text-gray-900">{selectedScenario?.name ?? '선택된 시나리오 없음'}</p>
                 </div>
                 <div className="text-right text-[11px] text-port-muted">
                   <p>{scenariosLoading ? '시나리오 불러오는 중...' : `${scenarios.length} scenarios`}</p>
@@ -351,7 +351,7 @@ export function MainLayout() {
                 <div className="space-y-2">
                   <div className="h-20 rounded border border-port-border bg-port-panel/40 px-3 py-2">
                     <p className="text-[11px] text-port-muted">현재 프레임</p>
-                    <p className="mt-1 text-sm text-white">{currentFrame?.label ?? '프레임 없음'}</p>
+                    <p className="mt-1 text-sm text-gray-900">{currentFrame?.label ?? '프레임 없음'}</p>
                     <p className="mt-1 text-xs text-port-muted">
                       {currentFrame?.summary || selectedScenario?.description || '선택한 시나리오의 프레임을 재생합니다.'}
                     </p>
@@ -368,8 +368,8 @@ export function MainLayout() {
                         }}
                         className={`min-w-28 rounded border px-3 py-2 text-left transition-colors ${
                           index === clampedTimelinePosition
-                            ? 'border-port-accent bg-port-accent/10 text-white'
-                            : 'border-port-border bg-port-panel/30 text-port-muted hover:text-white'
+                            ? 'border-port-accent bg-port-accent/10 text-gray-900'
+                            : 'border-port-border bg-port-panel/30 text-port-muted hover:text-gray-900'
                         }`}
                       >
                         <p className="text-[11px] font-mono">{formatFrameTime(frame)}</p>
@@ -385,7 +385,7 @@ export function MainLayout() {
                 </div>
 
                 <div className="rounded border border-port-border bg-port-panel/30 p-3 text-xs text-port-muted">
-                  <p className="mb-2 text-white">Playback</p>
+                  <p className="mb-2 text-gray-900">Playback</p>
                   <div className="space-y-1">
                     <p>Scenario ID: {selectedScenarioId ?? '-'}</p>
                     <p>Frame Index: {frames.length === 0 ? '-' : clampedTimelinePosition + 1}</p>
@@ -406,7 +406,7 @@ function CameraButton({ label, title }: { label: string; title: string }) {
     <button
       type="button"
       title={title}
-      className="w-7 h-7 bg-port-panel/80 backdrop-blur border border-port-border rounded text-xs text-port-muted hover:text-white hover:border-port-accent transition-colors flex items-center justify-center"
+      className="w-7 h-7 bg-port-panel/80 backdrop-blur border border-port-border rounded text-xs text-port-muted hover:text-gray-900 hover:border-port-accent transition-colors flex items-center justify-center"
     >
       {label}
     </button>

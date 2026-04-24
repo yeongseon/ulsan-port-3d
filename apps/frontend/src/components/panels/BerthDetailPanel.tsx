@@ -30,12 +30,12 @@ export function BerthDetailPanel() {
     <div className="absolute right-0 top-0 h-full w-72 bg-port-panel border-l border-port-border flex flex-col shadow-2xl z-30 animate-in slide-in-from-right duration-200">
       <div className="flex items-center justify-between px-4 py-3 border-b border-port-border">
         <div>
-          <h3 className="font-bold text-white text-sm">{berth.name}</h3>
+          <h3 className="font-bold text-gray-900 text-sm">{berth.name}</h3>
           <p className="text-xs text-port-muted">{berth.facility_code}</p>
         </div>
         <button
           type="button"
-          className="text-port-muted hover:text-white transition-colors text-lg leading-none"
+          className="text-port-muted hover:text-gray-900 transition-colors text-lg leading-none"
           onClick={() => selectEntity(null, null)}
         >
           ✕
@@ -45,11 +45,11 @@ export function BerthDetailPanel() {
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         <div className="flex items-center gap-2 p-2 bg-port-bg rounded">
           <div
-            className={`text-sm font-bold ${STATUS_COLORS[berth.status] ?? 'text-white'}`}
+            className={`text-sm font-bold ${STATUS_COLORS[berth.status] ?? 'text-gray-900'}`}
           >
             ●
           </div>
-          <span className="text-sm text-white">{STATUS_LABELS[berth.status] ?? berth.status}</span>
+          <span className="text-sm text-gray-900">{STATUS_LABELS[berth.status] ?? berth.status}</span>
         </div>
 
         <div className="bg-port-bg rounded-lg p-3 space-y-2">
@@ -74,7 +74,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between">
       <span className="text-xs text-port-muted">{label}</span>
-      <span className="text-xs font-mono text-white">{value}</span>
+      <span className="text-xs font-mono text-gray-900">{value}</span>
     </div>
   );
 }

@@ -11,7 +11,7 @@ function Row({ label, value, unit }: { label: string; value: string | number; un
   return (
     <div className="flex justify-between items-center py-1 border-b border-port-border last:border-0">
       <span className="text-xs text-port-muted">{label}</span>
-      <span className="text-sm font-mono text-white">
+        <span className="text-sm font-mono text-gray-900">
         {value}
         {unit && <span className="text-port-muted ml-1 text-xs">{unit}</span>}
       </span>
@@ -40,7 +40,7 @@ export function WeatherPanel() {
           ↑
         </div>
         <div>
-          <p className="text-sm font-bold text-white">{weather.wind_speed.toFixed(1)} m/s</p>
+          <p className="text-sm font-bold text-gray-900">{weather.wind_speed.toFixed(1)} m/s</p>
           <p className="text-xs text-port-muted">{compassDir(weather.wind_dir)} · 뷰포트 {windBeaufort}</p>
         </div>
       </div>

@@ -6,14 +6,14 @@ export default {
     extend: {
       colors: {
         port: {
-          bg: '#0a0e1a',
-          panel: '#111827',
-          border: '#1f2937',
-          accent: '#3b82f6',
-          success: '#22c55e',
-          warning: '#f59e0b',
-          danger: '#ef4444',
-          muted: '#6b7280',
+          bg: '#f8fafc',
+          panel: '#ffffff',
+          border: '#e2e8f0',
+          accent: '#2563eb',
+          success: '#16a34a',
+          warning: '#d97706',
+          danger: '#dc2626',
+          muted: '#64748b',
         },
       },
     },

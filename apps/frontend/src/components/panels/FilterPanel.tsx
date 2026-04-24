@@ -37,8 +37,8 @@ export function FilterPanel() {
                 onClick={() => toggleLayer(layer.id)}
                 className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
                   active
-                    ? 'bg-port-border text-white'
-                    : 'text-port-muted hover:bg-port-border hover:text-white'
+                    ? 'bg-port-border text-gray-900'
+                    : 'text-port-muted hover:bg-port-border hover:text-gray-900'
                 }`}
               >
                 <div
@@ -71,7 +71,7 @@ export function FilterPanel() {
       <div>
         <p className="text-xs text-port-muted uppercase tracking-wider mb-2">구역 필터</p>
         <select
-          className="w-full bg-port-bg border border-port-border rounded px-2 py-1 text-xs text-white focus:border-port-accent focus:outline-none"
+          className="w-full bg-port-bg border border-port-border rounded px-2 py-1 text-xs text-gray-900 focus:border-port-accent focus:outline-none"
           defaultValue="전체 구역"
         >
           {ZONES.map((z) => (
@@ -97,7 +97,7 @@ export function FilterPanel() {
                 className={`flex-1 py-1 rounded text-xs transition-colors ${
                   activeTab === tab
                     ? 'bg-port-accent text-white'
-                    : 'bg-port-bg text-port-muted hover:text-white'
+                    : 'bg-port-bg text-port-muted hover:text-gray-900'
                 }`}
               >
                 {labels[tab]}

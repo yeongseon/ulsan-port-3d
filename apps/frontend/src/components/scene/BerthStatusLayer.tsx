@@ -27,7 +27,7 @@ function BerthMarker({ berth }: { berth: Berth }) {
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={0.6}
+          emissiveIntensity={0.3}
           transparent
           opacity={0.85}
         />

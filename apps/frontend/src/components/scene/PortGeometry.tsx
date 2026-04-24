@@ -35,7 +35,7 @@ export function PortGeometry() {
     <group>
       <mesh position={[0, 0.5, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[120, 80]} />
-        <meshStandardMaterial color="#141e2d" roughness={0.9} metalness={0.1} />
+        <meshStandardMaterial color="#b0bec5" roughness={0.9} metalness={0.1} />
       </mesh>
 
       {BERTH_DEFINITIONS.map((berth) => {
@@ -46,11 +46,11 @@ export function PortGeometry() {
           <group key={berth.name} position={[pos.x, pos.y, pos.z]}>
             <mesh castShadow receiveShadow>
               <boxGeometry args={[w, 0.4, d]} />
-              <meshStandardMaterial color="#1e3a5f" roughness={0.8} metalness={0.2} />
+              <meshStandardMaterial color="#78909c" roughness={0.8} metalness={0.2} />
             </mesh>
             <mesh>
               <boxGeometry args={[w + 0.05, 0.45, d + 0.05]} />
-              <meshStandardMaterial color="#3b82f6" wireframe />
+              <meshStandardMaterial color="#2563eb" wireframe />
             </mesh>
           </group>
         );
@@ -61,7 +61,7 @@ export function PortGeometry() {
         return (
           <mesh key={key} position={[Math.cos(angle) * r, 3, Math.sin(angle) * r]} castShadow>
             <cylinderGeometry args={[0.3, 0.3, 6, 8]} />
-            <meshStandardMaterial color="#2d3748" roughness={0.7} metalness={0.5} />
+            <meshStandardMaterial color="#546e7a" roughness={0.7} metalness={0.5} />
           </mesh>
         );
       })}

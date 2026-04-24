@@ -28,7 +28,7 @@ export function Header() {
         type="button"
         onClick={toggleLeft}
         className={`w-7 h-7 flex flex-col justify-center gap-1 rounded transition-colors ${
-          leftOpen ? 'text-port-accent' : 'text-port-muted hover:text-white'
+          leftOpen ? 'text-port-accent' : 'text-port-muted hover:text-gray-900'
         }`}
       >
         <span className="block h-0.5 bg-current" />
@@ -38,13 +38,13 @@ export function Header() {
 
       <div className="flex items-center gap-2">
         <div className="w-2 h-2 rounded-full bg-port-success animate-pulse" />
-        <h1 className="text-sm font-bold tracking-wide text-white">울산항 3D 관제 시스템</h1>
+        <h1 className="text-sm font-bold tracking-wide text-gray-900">울산항 3D 관제 시스템</h1>
         <span className="text-port-muted text-xs">ULSANPORT v1.0</span>
       </div>
 
       <div className="ml-auto flex items-center gap-6">
         <div className="text-right hidden sm:block">
-          <p className="text-xs font-mono text-white">{timeStr}</p>
+          <p className="text-xs font-mono text-gray-900">{timeStr}</p>
           <p className="text-xs text-port-muted">{dateStr}</p>
         </div>
 

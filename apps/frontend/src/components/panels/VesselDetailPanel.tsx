@@ -26,12 +26,12 @@ export function VesselDetailPanel() {
     <div className="absolute right-0 top-0 h-full w-72 bg-port-panel border-l border-port-border flex flex-col shadow-2xl z-30 animate-in slide-in-from-right duration-200">
       <div className="flex items-center justify-between px-4 py-3 border-b border-port-border">
         <div>
-          <h3 className="font-bold text-white text-sm">{vessel.name}</h3>
+          <h3 className="font-bold text-gray-900 text-sm">{vessel.name}</h3>
           <p className="text-xs text-port-muted">{vessel.call_sign}</p>
         </div>
         <button
           type="button"
-          className="text-port-muted hover:text-white transition-colors text-lg leading-none"
+          className="text-port-muted hover:text-gray-900 transition-colors text-lg leading-none"
           onClick={() => selectEntity(null, null)}
         >
           ✕
@@ -68,7 +68,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between">
       <span className="text-xs text-port-muted">{label}</span>
-      <span className="text-xs font-mono text-white">{value}</span>
+      <span className="text-xs font-mono text-gray-900">{value}</span>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, Stars } from '@react-three/drei';
+import { OrbitControls, Environment } from '@react-three/drei';
 import { SeaPlane } from './SeaPlane';
 import { PortGeometry } from './PortGeometry';
 import { VesselLayer } from './VesselLayer';
@@ -17,21 +17,19 @@ function SceneContent() {
 
   return (
     <>
-      <color attach="background" args={['#060b18']} />
-      <fog attach="fog" args={['#060b18', 200, 1500]} />
+      <color attach="background" args={['#e8f4f8']} />
+      <fog attach="fog" args={['#e8f4f8', 400, 2000]} />
 
-      <ambientLight intensity={0.15} />
+      <ambientLight intensity={0.7} />
       <directionalLight
         position={[100, 200, 100]}
-        intensity={1.2}
+        intensity={1.5}
         castShadow
         shadow-mapSize={[2048, 2048]}
       />
-      <pointLight position={[0, 80, 0]} intensity={0.4} color="#4a90d9" />
+      <pointLight position={[0, 80, 0]} intensity={0.3} color="#87ceeb" />
 
-      <Stars radius={800} depth={100} count={5000} factor={4} saturation={0} fade />
-
-      <Environment preset="night" />
+      <Environment preset="city" />
 
       <SeaPlane />
       <PortGeometry />
@@ -51,7 +49,7 @@ function SceneContent() {
       />
 
       <gridHelper
-        args={[2000, 100, '#1a2744', '#0d1529']}
+        args={[2000, 100, '#c8d6e5', '#dfe6ed']}
         position={[0, 0.1, 0]}
       />
 
@@ -73,7 +71,7 @@ export function PortScene() {
       shadows
       gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
       className="w-full h-full"
-      style={{ background: '#060b18' }}
+      style={{ background: '#e8f4f8' }}
     >
       <Suspense fallback={null}>
         <SceneContent />
