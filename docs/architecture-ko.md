@@ -671,7 +671,528 @@ flowchart TD
 
 ---
 
-## 13. 향후 발전 방향
+## 13. 시스템 컨텍스트
+
+시스템과 외부 사용자/시스템 간의 관계를 보여준다.
+
+```mermaid
+graph TB
+    subgraph Users["사용자"]
+        OP["항만 운영자"]
+        LM["물류 관리자"]
+        DEV["개발자/관리자"]
+    end
+
+    subgraph UlsanPort3D["울산항 3D 관제 시스템"]
+        FE["React + THREE.js<br/>3D 관제 대시보드"]
+        BE["FastAPI Backend<br/>REST + WebSocket API"]
+        DB[("PostgreSQL<br/>+ PostGIS")]
+        RD[("Redis<br/>Pub/Sub")]
+        ETL["ETL 파이프라인<br/>8개 수집기"]
+    end
+
+    subgraph External["외부 시스템"]
+        UPA["울산항만공사 API<br/>선박/선석/시설"]
+        KMA["기상청 API<br/>기상/조위 관측"]
+        GH["GitHub Pages<br/>정적 호스팅"]
+    end
+
+    OP --> FE
+    LM --> FE
+    DEV --> BE
+    FE <-->|"REST + WebSocket"| BE
+    BE <--> DB
+    BE <--> RD
+    ETL --> DB
+    ETL -->|"HTTP (3회 재시도)"| UPA
+    ETL -->|"HTTP"| KMA
+    FE -.->|"데모 배포"| GH
+```
+
+---
+
+## 14. 운영 모드
+
+시스템은 두 가지 실행 모드를 지원한다.
+
+### 14.1 Full-Stack 모드
+
+```mermaid
+flowchart TB
+    subgraph ETL_Layer["ETL 파이프라인"]
+        SCHED["APScheduler<br/>주기적 실행"]
+        COL["Collectors (8개)"]
+        NORM["Normalizers (4개)"]
+        SCHED --> COL --> NORM
+    end
+
+    subgraph Backend["FastAPI 백엔드"]
+        API["REST Routers (12개)"]
+        SVC["Services (18개)"]
+        WS_MGR["WebSocket Manager"]
+        PUBSUB["Redis PubSub Bridge"]
+        API --> SVC
+        SVC --> WS_MGR
+        PUBSUB --> WS_MGR
+    end
+
+    subgraph Data["데이터 계층"]
+        PG[("PostgreSQL + PostGIS")]
+        REDIS[("Redis")]
+    end
+
+    subgraph Frontend["React 프론트엔드"]
+        WSC["useWebSocket Hook"]
+        HTTP["apiClient (axios)"]
+        STORES["Zustand Stores (3개)"]
+        SCENE["PortScene (THREE.js)"]
+        PANELS["UI 패널 (7개)"]
+
+        WSC --> STORES
+        HTTP --> STORES
+        STORES --> SCENE
+        STORES --> PANELS
+    end
+
+    NORM --> PG
+    SVC --> PG
+    SVC --> REDIS
+    WS_MGR -->|"JSON broadcast"| WSC
+    PANELS -->|"HTTP GET"| API
+```
+
+### 14.2 Static / Demo 모드 (GitHub Pages)
+
+백엔드 없이 브라우저에서 동작하는 데모 모드이다.
+
+```mermaid
+flowchart LR
+    subgraph Browser["브라우저"]
+        MOCK_EN["enableMocks()<br/>main.tsx에서 호출"]
+        MOCK_CLI["mockApiClient<br/>API 메서드 교체"]
+        MOCK_WS["mockWebSocket<br/>5초 간격 위치 시뮬레이션"]
+        MOCK_DATA["Mock 데이터<br/>선박 15척, 선석 12개"]
+        STORES2["Zustand Stores"]
+        UI2["React UI + THREE.js"]
+
+        MOCK_EN --> MOCK_CLI
+        MOCK_EN --> MOCK_WS
+        MOCK_CLI --> MOCK_DATA
+        MOCK_DATA --> STORES2
+        MOCK_WS --> STORES2
+        STORES2 --> UI2
+    end
+```
+
+두 모드의 코드 공유
+
+프론트엔드 컴포넌트는 `apiClient` 객체를 통해 데이터에 접근한다. Full-Stack 모드에서는 `api/client.ts`의 axios HTTP 클라이언트를, Static 모드에서는 `mock/mockClient.ts`의 인메모리 데이터를 사용한다. `enableMocks()`가 `Object.assign`으로 메서드를 교체하므로 컴포넌트 코드 변경이 불필요하다.
+
+---
+
+## 15. 데이터 흐름 상세
+
+### 15.1 선박 위치 데이터 수명주기
+
+```mermaid
+sequenceDiagram
+    participant UPA as 울산항만공사 API
+    participant COL as vessel_position 수집기
+    participant RAW as data/raw/ 저장소
+    participant NORM as vessel normalizer
+    participant DB as PostgreSQL
+    participant API as FastAPI
+    participant WS as WebSocket
+    participant FE as React 프론트엔드
+
+    loop ETL 주기 (5분)
+        COL->>UPA: HTTP GET (fetch_with_retry)
+        UPA-->>COL: JSON 응답
+        COL->>RAW: save_raw_snapshot()
+        COL->>NORM: extract_items() + normalize_vessel()
+        NORM->>DB: INSERT ON CONFLICT (vessel_position)
+        NORM->>DB: UPSERT latest_vessel_position
+    end
+
+    FE->>API: GET /vessels/live
+    API->>DB: SELECT latest_vessel_position
+    DB-->>API: 선박 목록
+    API-->>FE: JSON 응답
+
+    FE->>WS: WebSocket 연결 (/ws/events)
+    loop 실시간 업데이트
+        DB-->>API: 새 데이터 감지
+        API->>WS: Redis Pub/Sub 브로드캐스트
+        WS-->>FE: JSON 메시지
+        FE->>FE: dataStore.setVessels()
+        FE->>FE: VesselLayer 리렌더
+    end
+```
+
+### 15.2 알림 생성 흐름
+
+```mermaid
+sequenceDiagram
+    participant FE as 프론트엔드
+    participant API as FastAPI
+    participant ALERT as alert_engine
+    participant RULE as rule_engine
+    participant INSIGHT as insight_rules
+    participant LLM as llm_summary
+    participant DB as PostgreSQL
+
+    FE->>API: POST /alerts/evaluate
+    API->>ALERT: evaluate_alerts(db)
+    ALERT->>DB: 기상/선석/혼잡 데이터 조회
+    DB-->>ALERT: 현재 상태
+    ALERT->>ALERT: 임계값 판정
+
+    alt 알림 조건 충족
+        ALERT->>DB: INSERT alert
+        ALERT-->>API: new_alerts[]
+    end
+
+    FE->>API: GET /insights/current
+    API->>RULE: evaluate_rules(db)
+    RULE->>INSIGHT: 복합 조건 분석
+    INSIGHT-->>RULE: rule_based_insights[]
+    API->>LLM: generate_llm_summary(insights)
+    LLM-->>API: 자연어 요약
+    API-->>FE: insights + llm_summary
+```
+
+---
+
+## 16. 모듈 의존성
+
+### 16.1 백엔드 모듈 관계
+
+```mermaid
+graph TD
+    MAIN["main.py"] --> CORE_CFG["core/config.py"]
+    MAIN --> CORE_DB["core/database.py"]
+    MAIN --> CORE_ERR["core/errors.py"]
+    MAIN --> SEED["services/seed.py"]
+
+    MAIN --> R_VESSEL["routers/vessels"]
+    MAIN --> R_BERTH["routers/berths"]
+    MAIN --> R_WEATHER["routers/weather"]
+    MAIN --> R_STATS["routers/stats"]
+    MAIN --> R_GRAPH["routers/graph"]
+    MAIN --> R_SCEN["routers/scenarios"]
+    MAIN --> R_INSIGHT["routers/insights"]
+    MAIN --> R_WS["routers/websocket"]
+    MAIN --> R_PORT["routers/port"]
+    MAIN --> R_DOCS["routers/docs"]
+    MAIN --> R_HEALTH["routers/health"]
+
+    R_VESSEL --> S_VESSEL["services/vessels"]
+    R_BERTH --> S_BERTH["services/berths"]
+    R_WEATHER --> S_WEATHER["services/weather"]
+    R_STATS --> S_STATS["services/stats"]
+    R_GRAPH --> S_GRAPH["services/graph"]
+    R_SCEN --> S_SCEN["services/scenarios"]
+    R_PORT --> S_PORT["services/port"]
+    R_DOCS --> S_DOCS["services/docs"]
+    R_WS --> S_PUBSUB["services/pubsub"]
+
+    R_INSIGHT --> S_ALERT["services/alert_engine"]
+    R_INSIGHT --> S_RULE["services/rule_engine"]
+    R_INSIGHT --> S_LLM["services/llm_summary"]
+    S_RULE --> S_INSIGHT_R["services/insight_rules"]
+
+    S_VESSEL --> M_TS["models/timeseries"]
+    S_BERTH --> M_ST["models/static"]
+    S_WEATHER --> M_TS
+    S_GRAPH --> M_ST
+    S_GRAPH --> M_TS
+    S_DOCS --> M_DOC["models/documents"]
+
+    CORE_DB --> M_BASE["models/base"]
+    M_ST --> M_BASE
+    M_TS --> M_BASE
+    M_DOC --> M_BASE
+
+    S_PUBSUB --> REDIS[("Redis")]
+
+    style MAIN fill:#f96,stroke:#333
+    style S_GRAPH fill:#9f6,stroke:#333
+    style M_BASE fill:#69f,stroke:#333
+    style S_PUBSUB fill:#ff9,stroke:#333
+```
+
+### 16.2 프론트엔드 모듈 관계
+
+```mermaid
+graph TD
+    ENTRY["main.tsx"] --> APP["App.tsx"]
+    APP --> HEADER["Header"]
+    APP --> LAYOUT["MainLayout"]
+    APP --> DS["dataStore"]
+    APP --> API["api/client.ts<br/>(axios)"]
+    APP --> WS_HOOK["useWebSocket"]
+
+    LAYOUT --> SCENE["PortScene"]
+    LAYOUT --> PANELS["패널 영역"]
+
+    SCENE --> SEA["SeaPlane"]
+    SCENE --> LAND["LandMass"]
+    SCENE --> PORT_GEO["PortGeometry"]
+    SCENE --> VESSEL_L["VesselLayer"]
+    SCENE --> BERTH_L["BerthStatusLayer"]
+    SCENE --> ROUTE_L["RouteLayer"]
+    SCENE --> DS
+    SCENE --> MS["mapStore"]
+
+    VESSEL_L --> COORD["utils/coordinates<br/>latLonToLocal()"]
+    VESSEL_L --> MS
+    BERTH_L --> COORD
+    BERTH_L --> MS
+    BERTH_L --> PL["portLayout.ts"]
+    LAND --> COORD
+    PORT_GEO --> COORD
+    PORT_GEO --> PL
+    ROUTE_L --> COORD
+
+    PANELS --> VP["VesselDetailPanel"]
+    PANELS --> BP["BerthDetailPanel"]
+    PANELS --> WP["WeatherPanel"]
+    PANELS --> SP["StatsPanel"]
+    PANELS --> OP["OntologyGraphPanel"]
+    PANELS --> FP["FilterPanel"]
+    PANELS --> AB["AlertBanner"]
+
+    VP --> DS
+    VP --> MS
+    BP --> DS
+    BP --> MS
+    WP --> DS
+    SP --> DS
+    SP --> API
+    OP --> API
+    OP --> DS
+    OP --> MS
+    FP --> MS
+    FP --> US["uiStore"]
+    AB --> API
+
+    subgraph Mock["Mock 시스템"]
+        MOCK_IDX["mock/index.ts<br/>enableMocks()"]
+        MOCK_CLI["mock/mockClient.ts"]
+        MOCK_WS["mock/mockWebSocket.ts"]
+        MOCK_DATA["mock/data.ts"]
+        MOCK_CLI --> MOCK_DATA
+        MOCK_WS --> MOCK_DATA
+    end
+
+    ENTRY -.->|"VITE_USE_MOCK=true"| MOCK_IDX
+    MOCK_IDX -.->|"Object.assign"| API
+
+    style ENTRY fill:#f96
+    style DS fill:#9f6
+    style MS fill:#9f6
+    style US fill:#9f6
+    style COORD fill:#ff9
+    style MOCK_IDX fill:#f9f
+```
+
+---
+
+## 17. 상태 관리 아키텍처
+
+Zustand 3개 스토어의 상세 데이터 흐름을 보여준다.
+
+### 17.1 스토어 상세 구조
+
+```mermaid
+classDiagram
+    class dataStore {
+        +Vessel[] vessels
+        +Berth[] berths
+        +WeatherData weather
+        +setVessels(vessels)
+        +setBerths(berths)
+        +setWeather(weather)
+    }
+
+    class mapStore {
+        +Object3D cameraPosition
+        +string[] activeLayerIds
+        +SelectedEntity selectedEntity
+        +number zoomLevel
+        +selectEntity(type, id)
+        +clearSelection()
+        +toggleLayer(layerId)
+        +setZoomLevel(level)
+    }
+
+    class uiStore {
+        +boolean vesselPanelOpen
+        +boolean berthPanelOpen
+        +boolean weatherPanelOpen
+        +boolean statsPanelOpen
+        +boolean filterPanelOpen
+        +boolean ontologyPanelOpen
+        +string activeTab
+        +togglePanel(panelName)
+        +setActiveTab(tab)
+    }
+
+    dataStore <.. mapStore : "엔티티 ID 참조"
+    mapStore <.. uiStore : "선택 시 패널 자동 열기"
+```
+
+### 17.2 데이터 → UI 렌더링 흐름
+
+```mermaid
+flowchart LR
+    subgraph Sources["데이터 소스"]
+        HTTP["apiClient<br/>HTTP GET"]
+        WS["WebSocket<br/>실시간"]
+        MOCK["Mock Client<br/>데모"]
+    end
+
+    subgraph Stores["Zustand 스토어"]
+        DS["dataStore<br/>vessels, berths, weather"]
+        MS["mapStore<br/>camera, selection, layers"]
+        US["uiStore<br/>panels, tabs, filters"]
+    end
+
+    subgraph Scene["3D 씬"]
+        VL["VesselLayer<br/>선박 마커"]
+        BL["BerthStatusLayer<br/>선석 상태 색상"]
+        RL["RouteLayer<br/>항로 라인"]
+    end
+
+    subgraph Panels["UI 패널"]
+        VDP["선박 상세"]
+        BDP["선석 상세"]
+        WPL["기상"]
+        SPL["통계"]
+        OGP["온톨로지 그래프"]
+    end
+
+    HTTP --> DS
+    WS --> DS
+    MOCK --> DS
+
+    DS -->|"vessels[]"| VL
+    DS -->|"berths[]"| BL
+    MS -->|"activeLayerIds"| VL
+    MS -->|"activeLayerIds"| BL
+    MS -->|"activeLayerIds"| RL
+
+    MS -->|"selectedEntity"| VDP
+    MS -->|"selectedEntity"| BDP
+    DS -->|"weather"| WPL
+    US -->|"panelVisible"| VDP
+    US -->|"panelVisible"| BDP
+```
+
+---
+
+## 18. 이벤트 구동 아키텍처
+
+시스템은 WebSocket + Redis Pub/Sub 기반의 이벤트 구동 패턴을 사용한다.
+
+### 18.1 이벤트 유형
+
+| 이벤트 | 발생 시점 | 전달 채널 | 소비자 |
+|--------|-----------|-----------|--------|
+| `sensor_update` | ETL 수집 완료 시 | Redis → WebSocket | 선박/선석/기상 레이어 |
+| `vessel_position` | 선박 위치 갱신 시 | Redis → WebSocket | VesselLayer, VesselDetailPanel |
+| `berth_status_change` | 선석 상태 전환 시 | Redis → WebSocket | BerthStatusLayer, AlertBanner |
+| `weather_alert` | 기상 임계값 초과 시 | REST + WebSocket | WeatherPanel, AlertBanner |
+| `congestion_alert` | 혼잡 임계값 초과 시 | REST | AlertBanner |
+
+### 18.2 WebSocket 메시지 흐름
+
+```mermaid
+sequenceDiagram
+    participant ETL as ETL 수집기
+    participant DB as PostgreSQL
+    participant REDIS as Redis
+    participant API as FastAPI
+    participant WS as WebSocket Router
+    participant FE as 프론트엔드
+
+    ETL->>DB: 새 데이터 적재
+    API->>REDIS: PUBLISH (채널, 이벤트)
+    
+    Note over WS: RedisPubSubService 구독 중
+    REDIS-->>WS: 메시지 수신
+    WS-->>FE: JSON broadcast
+
+    FE->>FE: useWebSocket onMessage
+    FE->>FE: dataStore.setVessels() 등
+    FE->>FE: React 리렌더 트리거
+```
+
+### 18.3 이벤트 생성 조건
+
+```mermaid
+stateDiagram-v2
+    [*] --> 데이터수신: ETL 수집 완료
+
+    state 기상판정 {
+        [*] --> 풍속체크: wind_speed 확인
+        풍속체크 --> 경고: > 임계값
+        풍속체크 --> 정상
+        [*] --> 파고체크: wave_height 확인
+        파고체크 --> 경고: > 임계값
+        파고체크 --> 정상
+        [*] --> 시정체크: visibility 확인
+        시정체크 --> 경고: < 임계값
+        시정체크 --> 정상
+    }
+
+    state 선석판정 {
+        [*] --> 점유확인: 구역별 선석 상태
+        점유확인 --> 비가용: 전체 점유
+        점유확인 --> 가용: 여유 있음
+    }
+
+    state 혼잡판정 {
+        [*] --> 대기확인: 대기 선박 수
+        대기확인 --> 혼잡: > 임계값
+        대기확인 --> 원활
+    }
+
+    데이터수신 --> 기상판정
+    데이터수신 --> 선석판정
+    데이터수신 --> 혼잡판정
+
+    경고 --> 단일알림: 1개 조건
+    비가용 --> 단일알림
+    혼잡 --> 단일알림
+    경고 --> 복합알림: 2개+ 동시
+    비가용 --> 복합알림
+    혼잡 --> 복합알림
+
+    단일알림 --> [*]
+    복합알림 --> [*]
+```
+
+---
+
+## 19. 확장 포인트
+
+| 확장 영역 | 현재 구현 | 확장 방법 |
+|-----------|----------|-----------|
+| **데이터 소스** | 울산항만공사 공공 API (Mock) | 실제 API 키 연동, 추가 공공데이터 소스 |
+| **3D 렌더링** | 프로시저럴 THREE.js 메쉬 | Spark 2.0 포토리얼리스틱, 실제 선박 3D 모델 |
+| **데이터베이스** | PostgreSQL + PostGIS | 읽기 전용 복제본, 커넥션 풀 최적화 |
+| **실시간** | Redis Pub/Sub + WebSocket | Redis Streams, 메시지 영속화 |
+| **AI/ML** | 규칙 엔진 + LLM 요약 | 혼잡 예측 모델, 최적 입항 스케줄링 |
+| **인증** | 없음 (공개 데모) | FastAPI OAuth2 + JWT |
+| **알림** | UI 배너 전용 | Webhook → SMS/Email/Push 알림 |
+| **모바일** | 데스크톱 전용 | 반응형 UI + 터치 제스처 3D 컨트롤 |
+| **다국어** | 한국어 (데이터) + 영어 (코드) | i18n 프레임워크 → UI 다국어 전환 |
+| **타 항만** | 울산항 전용 | 온톨로지 기반 설계로 부산항/인천항 확장 가능 |
+
+---
+
+## 20. 향후 발전 방향
 
 | 영역 | 계획 |
 |------|------|
