@@ -81,9 +81,6 @@ nav:
       - Ontology Reference: ontology.md
       - API Specification: api-spec.md
 
-extra_javascript:
-  - https://unpkg.com/mermaid@11/dist/mermaid.min.js
-
 extra:
   social:
     - icon: fontawesome/brands/github
