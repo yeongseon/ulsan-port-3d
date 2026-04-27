@@ -31,6 +31,20 @@ The product visualizes this information in a 3D web interface so users can move 
 
 The solution is intended to support both day-to-day monitoring and operational analysis, while preserving clear domain vocabulary and a strict ontology-first architecture across the monorepo.
 
+### Problem and Solution Overview
+
+```mermaid
+flowchart LR
+    subgraph Fragmented Sources
+        A[Public APIs]
+        B[Tabular Data]
+        C[Static Websites]
+    end
+    Fragmented Sources --> ETL[ETL Pipeline]
+    ETL --> DB[(Unified DB)]
+    DB --> Dash[3D Monitoring Dashboard]
+```
+
 ## §2 Goals
 
 ### Primary Goals
@@ -71,6 +85,14 @@ The solution is intended to support both day-to-day monitoring and operational a
 - As a logistics manager, I want to understand which terminal or berth is associated with a vessel call so that I can coordinate downstream operations.
 - As a logistics manager, I want access to hazard and MSDS documents connected to cargo context so that compliance and safety information is easy to locate.
 - As a logistics manager, I want a summarized current-state view so that I can brief stakeholders without manually reading multiple systems.
+
+### User Persona Workflows
+
+```mermaid
+flowchart LR
+    Operator[Port Operator] --> OpWork[Assess Traffic, Monitor Berth, Replay Scenarios]
+    Manager[Logistics Manager] --> ManWork[Track Trends, Review Arrivals, Locate Safety Docs]
+```
 
 ## §4 Functional Requirements
 
@@ -154,6 +176,25 @@ The system shall maintain current operator-facing documentation.
 - Ontology reference for entity and relationship semantics
 - API specification for backend consumers
 
+### Operator Experience Journey
+
+```mermaid
+journey
+    title Port Operator Daily Workflow
+    section Morning Check
+        Open 3D dashboard: 5: Operator
+        Review vessel positions: 5: Operator
+        Check weather alerts: 4: Operator
+    section Active Monitoring
+        Monitor berth status: 5: Operator
+        Respond to alerts: 3: Operator
+        Explore ontology graph: 4: Operator
+    section End of Shift
+        Review statistics: 4: Operator
+        Replay scenarios: 4: Operator
+        Generate insights: 5: Operator
+```
+
 ## §5 Non-Functional Requirements
 
 ### Performance
@@ -161,6 +202,17 @@ The system shall maintain current operator-facing documentation.
 - Real-time operational data should be available with target end-to-end latency below 5 seconds for active monitoring views.
 - The frontend should remain responsive during common interactions such as camera movement, filtering, and panel switching.
 - API responses for standard list and summary endpoints should be sized for practical dashboard use.
+
+### Non-Functional Requirement Priority
+
+```mermaid
+pie title Non-Functional Requirement Priority
+    "Performance" : 30
+    "Scalability" : 25
+    "Reliability" : 25
+    "Maintainability" : 10
+    "Security" : 10
+```
 
 ### Scalability
 
@@ -251,6 +303,17 @@ The product is implemented as a monorepo with shared packages and clear runtime 
 5. Frontend stores combine API and WebSocket data into the monitoring UI.
 6. Ontology graph services expose relationship exploration based on shared predicates.
 
+### Data Flow Diagram
+
+```mermaid
+flowchart TD
+    Step1[Collect Public APIs and Source Pages] --> Step2[Persist Raw Snapshots]
+    Step2 --> Step3[Insert Normalized Data into DB]
+    Step3 --> Step4[Expose Domain Views via FastAPI]
+    Step4 --> Step5[Frontend Consumes API and WebSocket]
+    Step5 --> Step6[Ontology Services Enable Graph Exploration]
+```
+
 ## §8 Ontology
 
 The ontology expresses the operational model of the port as a set of classes and directional relationships.
@@ -295,6 +358,23 @@ The current shared package expands the business model into concrete classes used
 - Documents carry safety and cargo handling context.
 - Alerts and insights summarize operational risk at the application layer.
 
+### Conceptual Hierarchy Diagram
+
+```mermaid
+graph TD
+    Port --> PortZones
+    PortZones --> Berths
+    PortZones --> Buoys
+    PortZones --> RouteSegments
+    PortZones --> EnvironmentalObs[Environmental Observations]
+    Vessel --> VoyageCall
+    VoyageCall --> Berths
+    Operator --> PhysicalAssets[Physical Assets]
+    Operator --> SafetyDocs[Safety Documentation]
+    TankTerminal --> CargoTypes
+    TankTerminal --> PortZones
+```
+
 ### Relationship Statements
 
 The current implementation supports the following relationship statements aligned with the ontology package:
@@ -319,6 +399,31 @@ The current implementation supports the following relationship statements aligne
 18. Operator `hasHazardDoc` HazardDoc
 19. CargoType `hasMsds` MsdsDoc
 20. ScenarioFrame captures point-in-time snapshots for vessels, berths, weather, and alerts in the application layer
+
+### Relationship Map
+
+```mermaid
+graph TD
+    Port -- hasZone --> Zone
+    Zone -- hasBerth --> Berth
+    Zone -- hasBuoy --> Buoy
+    Zone -- hasRouteSegment --> RouteSegment
+    Operator -- operates --> Berth
+    Operator -- operates --> TankTerminal
+    TankTerminal -- locatedIn --> Zone
+    TankTerminal -- stores --> CargoType
+    Vessel -- hasVoyageCall --> VoyageCall
+    VoyageCall -- usesFacility --> Berth
+    VoyageCall -- hasEvent --> VesselEvent
+    Vessel -- hasPosition --> VesselPosition
+    Berth -- hasStatus --> BerthStatus
+    Berth -- handlesCargo --> CargoType
+    Zone -- hasWeather --> WeatherObservation
+    Zone -- hasForecast --> WeatherForecast
+    Zone -- hasTide --> TideObservation
+    Operator -- hasHazardDoc --> HazardDoc
+    CargoType -- hasMsds --> MsdsDoc
+```
 
 ### Ontology Requirements
 
@@ -352,6 +457,35 @@ The API should support:
 - scenario playback retrieval
 - graph-centric exploration
 - machine-readable problem responses for known error cases
+
+### Operator Workflow Sequence
+
+```mermaid
+sequenceDiagram
+    actor Op as Port Operator
+    participant FE as Frontend (3D)
+    participant API as FastAPI
+    participant DB as PostgreSQL
+    participant Redis as Redis PubSub
+    
+    Op->>FE: Open dashboard
+    FE->>API: GET /vessels/live
+    API->>DB: Query latest positions
+    DB-->>API: Vessel list
+    API-->>FE: JSON response
+    FE->>FE: Render 3D vessels
+    FE->>API: WS /ws/events
+    API->>Redis: Subscribe channel
+    loop Real-time updates
+        Redis-->>API: New position event
+        API-->>FE: WS message
+        FE->>FE: Update vessel markers
+    end
+    Op->>FE: Click vessel
+    FE->>API: GET /vessels/{id}
+    API-->>FE: Vessel detail
+    FE->>FE: Show detail panel
+```
 
 ## §10 Tracking and Delivery Model
 

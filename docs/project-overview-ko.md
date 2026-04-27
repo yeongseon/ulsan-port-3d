@@ -33,32 +33,30 @@
 
 ### 2.1 시스템 구성
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                   울산항 공공 API                         │
-│   (선박위치, 선석현황, 기상관측, 화물통계, 시설정보)         │
-└──────────────────┬──────────────────────────────────────┘
-                   │
-                   ▼
-┌──────────────────────────────────────┐
-│         ETL 파이프라인 (8개 수집기)    │
-│   수집 → 원본 저장 → 정규화 → DB 적재  │
-└──────────────────┬───────────────────┘
-                   │
-                   ▼
-┌──────────────────────────────────────┐
-│      PostgreSQL + PostGIS 데이터베이스  │
-│   (공간 데이터, 시계열, 온톨로지 매핑)   │
-└──────────────────┬───────────────────┘
-                   │
-          ┌────────┴────────┐
-          ▼                 ▼
-┌─────────────────┐ ┌──────────────────────────────────┐
-│   FastAPI 백엔드  │ │     React + THREE.js 프론트엔드    │
-│ REST + WebSocket │ │   3D 관제 화면 + UI 대시보드        │
-│ 온톨로지 그래프   │ │   실시간 선박 트래킹 + 알림         │
-│ AI 인사이트      │ │   온톨로지 그래프 탐색 패널          │
-└─────────────────┘ └──────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph External ["외부 데이터 소스"]
+        API["울산항 공공 API<br/>(선박위치, 선석현황, 기상관측, 화물통계, 시설정보)"]
+    end
+
+    subgraph Pipeline ["데이터 처리"]
+        ETL["ETL 파이프라인 (8개 수집기)<br/>수집 → 원본 저장 → 정규화 → DB 적재"]
+    end
+
+    subgraph Storage ["데이터베이스"]
+        DB[("PostgreSQL + PostGIS<br/>(공간 데이터, 시계열, 온톨로지 매핑)")]
+    end
+
+    subgraph Application ["애플리케이션 레이어"]
+        direction LR
+        Backend["FastAPI 백엔드<br/>REST + WebSocket<br/>온톨로지 그래프<br/>AI 인사이트"]
+        Frontend["React + THREE.js 프론트엔드<br/>3D 관제 화면 + UI 대시보드<br/>실시간 선박 트래킹 + 알림<br/>온톨로지 그래프 탐색 패널"]
+    end
+
+    API --> ETL
+    ETL --> DB
+    DB --> Backend
+    DB --> Frontend
 ```
 
 ### 2.2 핵심 기능
@@ -94,6 +92,22 @@
 | **실시간성** | 배치 갱신 (분~시 단위) | WebSocket + Redis Pub/Sub (초 단위) |
 | **인사이트** | 수동 판단 | AI 규칙 엔진 + LLM 요약으로 자동 생성 |
 | **확장성** | 모놀리식 | 모노레포 + 공유 패키지 + 온톨로지 우선 설계 |
+
+### 사용자 여정 비교
+```mermaid
+journey
+    title 항만 운영자의 하루
+    section 기존 시스템
+        선박 위치 확인: 2: 운영자
+        선석 현황 조회: 2: 운영자
+        기상 데이터 확인: 1: 운영자
+        수동 데이터 종합: 1: 운영자
+    section 본 시스템
+        3D 대시보드 접속: 5: 운영자
+        실시간 통합 모니터링: 5: 운영자
+        AI 인사이트 확인: 4: 운영자
+        온톨로지 관계 탐색: 4: 운영자
+```
 
 ### 3.2 기술적 혁신
 
@@ -174,10 +188,24 @@ ulsan-port-3d/
 | 항로 GIS | 울산항만공사 | 항로 라인 좌표 데이터 |
 | 유류 터미널 | 울산항만공사 | 탱크 터미널 시설 현황 |
 
+### 공공 데이터 소스 분포
+```mermaid
+pie title 공공 데이터 소스 분포
+    "선박 데이터 (위치/이벤트)" : 3
+    "선석/시설 데이터" : 2
+    "기상/조위 데이터" : 1
+    "화물/통계 데이터" : 2
+    "항로/터미널 데이터" : 2
+```
+
 ### 5.2 데이터 파이프라인
 
-```
-공공 API → 수집기(8개) → 원본 저장(JSON) → 정규화(4개) → DB 적재(Upsert)
+```mermaid
+flowchart LR
+    A["공공 API"] --> B["수집기 (8개)"]
+    B --> C["원본 저장 (JSON)"]
+    C --> D["정규화 (4개)"]
+    D --> E["DB 적재 (Upsert)"]
 ```
 
 - **수집**: httpx 비동기 HTTP + 3회 재시도 + 지수 백오프
@@ -247,20 +275,20 @@ TankTerminal ──stores──▶ CargoType ──hasMsds──▶ MsdsDoc
 
 ### 7.1 화면 구성
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│  [헤더: 울산항 3D 관제 시스템]           [필터] [알림] [설정]     │
-├────────────────────────────────────────────────────────────────┤
-│                                              │                 │
-│                                              │  선박 상세 패널  │
-│            3D 관제 화면                       │  선석 상세 패널  │
-│   (울산만 지형 + 선박 + 부두 + 항로)          │  기상 패널       │
-│                                              │  통계 패널       │
-│                                              │  온톨로지 그래프  │
-│                                              │                 │
-├────────────────────────────────────────────────────────────────┤
-│  [알림 배너: 기상 경고, 혼잡 알림, 선석 비가용 알림]              │
-└────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    Header["헤더: 울산항 3D 관제 시스템<br/>(필터, 알림, 설정)"]
+    
+    subgraph Main ["메인 영역"]
+        direction LR
+        Scene["3D 관제 화면<br/>(울산만 지형 + 선박 + 부두 + 항로)"]
+        Panels["정보 패널<br/>(선박/선석 상세, 기상, 통계, 온톨로지)"]
+    end
+    
+    Footer["알림 배너: 기상 경고, 혼잡 알림, 선석 비가용 알림"]
+
+    Header --> Main
+    Main --> Footer
 ```
 
 ### 7.2 3D 씬 구성
@@ -269,6 +297,29 @@ TankTerminal ──stores──▶ CargoType ──hasMsds──▶ MsdsDoc
 |--------|------|-----------|
 | **StaticScene** | 해수면, 울산만 해안선·방파제·태화강, 부두·크레인·저유탱크 | 1회 렌더 (React.memo) |
 | **DynamicLayers** | 선박 위치·방향, 선석 상태 색상, 항로 라인 | 실시간 (WebSocket/HTTP) |
+
+### 실시간 선박 트래킹 흐름
+```mermaid
+sequenceDiagram
+    participant AIS as AIS 데이터 소스
+    participant ETL as ETL 수집기
+    participant DB as PostgreSQL
+    participant API as FastAPI
+    participant WS as WebSocket
+    participant UI as 3D 관제 화면
+    
+    loop 매 5초
+        ETL->>AIS: 선박 위치 요청
+        AIS-->>ETL: 위치 데이터 (WGS84)
+        ETL->>DB: upsert 최신 위치
+    end
+    API->>DB: 위치 조회
+    DB-->>API: 선박 목록
+    API->>WS: 위치 업데이트 브로드캐스트
+    WS->>UI: JSON 메시지
+    UI->>UI: latLonToLocal() 좌표 변환
+    UI->>UI: VesselLayer 리렌더
+```
 
 ### 7.3 울산만 실제 지형 재현
 
@@ -308,22 +359,30 @@ TankTerminal ──stores──▶ CargoType ──hasMsds──▶ MsdsDoc
 | 혼잡 | 대기 선박 수 > 임계값, 평균 대기 시간 > 임계값 | Warning / Info |
 | 복합 | 위 조건 2개 이상 동시 발생 | Critical |
 
+### 알림 수명 주기
+```mermaid
+stateDiagram-v2
+    [*] --> 데이터수신: 실시간 데이터 입력
+    데이터수신 --> 규칙평가: rule_engine 처리
+    규칙평가 --> 정상: 임계값 미달
+    규칙평가 --> 경고생성: 임계값 초과
+    경고생성 --> 단일알림: 단일 조건
+    경고생성 --> 복합알림: 2개+ 조건 동시
+    단일알림 --> LLM요약: 자연어 생성
+    복합알림 --> LLM요약: 자연어 생성
+    LLM요약 --> 대시보드표시: 인사이트 카드
+    대시보드표시 --> [*]
+    정상 --> [*]
+```
+
 ### 8.2 규칙 엔진 + LLM 요약
 
-```
-실시간 데이터 수신
-    │
-    ▼
-규칙 엔진 (rule_engine.py)
-    │ 임계값 기반 판단
-    ▼
-인사이트 규칙 (insight_rules.py)
-    │ 복합 조건 분석
-    ▼
-LLM 요약 (llm_summary.py)
-    │ 자연어 상황 요약 생성
-    ▼
-운영자 대시보드에 인사이트 카드로 표시
+```mermaid
+flowchart TD
+    Data["실시간 데이터 수신"] --> Engine["규칙 엔진 (rule_engine.py)<br/>임계값 기반 판단"]
+    Engine --> Insight["인사이트 규칙 (insight_rules.py)<br/>복합 조건 분석"]
+    Insight --> LLM["LLM 요약 (llm_summary.py)<br/>자연어 상황 요약 생성"]
+    LLM --> UI["운영자 대시보드에 인사이트 카드로 표시"]
 ```
 
 ### 8.3 시나리오 재생
@@ -354,7 +413,27 @@ LLM 요약 (llm_summary.py)
 | API 엔드포인트 | 24개 (HTTP 22 + WebSocket 2) |
 | Mock 데이터 | 선박 15척, 선석 12개 |
 
+### 코드 구성 비율
+```mermaid
+pie title 코드 구성 비율
+    "프론트엔드 (React + THREE.js)" : 45
+    "백엔드 (FastAPI)" : 30
+    "ETL 파이프라인" : 15
+    "공유 패키지" : 10
+```
+
 ### 9.2 코드 품질 관리
+
+```mermaid
+flowchart TD
+    Start["main.tsx"] --> MockCheck{"VITE_USE_MOCK === 'true'?"}
+    
+    MockCheck -- "YES" --> Enable["enableMocks()"]
+    Enable --> Replace["Object.assign(apiClient, mockApiClient)\n(모든 API 메서드를 Mock으로 교체)"]
+    Replace --> StartWS["App.tsx → startMockWebSocket()\n(5초마다 선박 위치 업데이트 시뮬레이션)"]
+    
+    MockCheck -- "NO" --> Real["실제 apiClient + useWebSocket 사용"]
+```
 
 | 도구 | 역할 |
 |------|------|

@@ -4,6 +4,15 @@
 
 This document describes the backend API exposed by `apps/backend/app/main.py` and the router modules under `apps/backend/app/routers/`.
 
+### API Architecture
+
+```mermaid
+flowchart LR
+    Client[Client] --> API[REST API /api/v1/*]
+    API --> Services[Services]
+    Services --> DB[(DB/Redis)]
+```
+
 - API title: `Ulsan Port 3D Monitoring API`
 - Current version: `0.1.0`
 - REST base path: `/api/v1`
@@ -37,6 +46,22 @@ Several routers explicitly document `ProblemDetail` for error responses.
 ### Authentication
 
 No authentication or authorization layer is defined in the current router set.
+
+### API Domains
+
+```mermaid
+flowchart TD
+    API[API] --> Port[Port]
+    API --> Vessels[Vessels]
+    API --> Berths[Berths]
+    API --> Weather[Weather]
+    API --> Stats[Stats]
+    API --> Docs[Docs]
+    API --> Scenarios[Scenarios]
+    API --> Graph[Graph]
+    API --> WebSocket[WebSocket]
+    API --> Insights[Insights]
+```
 
 ---
 
@@ -100,6 +125,19 @@ Array of zone objects:
 ---
 
 ## Vessels
+
+### Vessel Data Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Collected: ETL ingestion
+    Collected --> Normalized: Normalizer
+    Normalized --> Stored: DB upsert
+    Stored --> Live: GET /vessels/live
+    Stored --> Detail: GET /vessels/{id}
+    Live --> Streamed: WS /ws/events
+    Detail --> GraphExplored: GET /graph/Vessel/{id}
+```
 
 ### `GET /api/v1/vessels`
 
@@ -378,6 +416,26 @@ Returns weather forecast series, optionally scoped to a zone.
 
 ## Statistics
 
+### Data Freshness Timeline
+
+```mermaid
+gantt
+    title Data Freshness Timeline
+    dateFormat HH:mm
+    axisFormat %H:%M
+    section Vessel Position
+        AIS collection    :active, vp, 00:00, 5m
+        DB available      :va, after vp, 1m
+    section Berth Status
+        Status poll       :active, bs, 00:00, 10m
+        DB available      :ba, after bs, 2m
+    section Weather
+        Observation poll  :active, wo, 00:00, 15m
+        DB available      :wa, after wo, 2m
+    section Statistics
+        Monthly batch     :ms, 00:00, 60m
+```
+
 ### `GET /api/v1/stats/arrivals`
 
 Returns monthly arrival statistics.
@@ -594,6 +652,24 @@ Returns the ordered frames for a scenario.
 
 ## Graph
 
+### Graph Entity Relationships
+
+```mermaid
+erDiagram
+    PORT ||--o{ ZONE : hasZone
+    ZONE ||--o{ BERTH : hasBerth
+    ZONE ||--o{ BUOY : hasBuoy
+    ZONE ||--o{ ROUTE_SEGMENT : hasRouteSegment
+    OPERATOR ||--o{ BERTH : operates
+    OPERATOR ||--o{ TANK_TERMINAL : operates
+    VESSEL ||--o{ VOYAGE_CALL : hasVoyageCall
+    VOYAGE_CALL }o--|| BERTH : usesFacility
+    VESSEL ||--o{ VESSEL_POSITION : hasPosition
+    BERTH ||--o{ BERTH_STATUS : hasStatus
+    BERTH ||--o{ CARGO_TYPE : handlesCargo
+    CARGO_TYPE ||--o{ MSDS_DOC : hasMsds
+```
+
 ### `GET /api/v1/graph/{entity_type}/{entity_id}`
 
 Returns graph context centered on one entity.
@@ -679,7 +755,18 @@ Explores graph neighborhoods around an optional entity anchor.
 - `422 Unprocessable Entity` for invalid `depth` or `direction`
 - `500 Internal Server Error` (`ProblemDetail`)
 
----
+### Event Flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    participant Redis
+    Client->>Server: WS upgrade
+    Server->>Redis: subscribe
+    Redis-->>Server: event
+    Server-->>Client: JSON message
+```
 
 ## WebSocket
 
@@ -860,5 +947,17 @@ The current router set defines the following backend entry points:
 22. `GET /api/v1/insights/current`
 23. `GET /api/v1/alerts`
 24. `POST /api/v1/alerts/evaluate`
+
+### Request Lifecycle
+
+```mermaid
+graph LR
+    Client[Client] --> FastAPI[FastAPI]
+    FastAPI --> Router[Router]
+    Router --> Service[Service]
+    Service --> DB[(DB/Redis)]
+    DB --> Service
+    Service --> Response[Response]
+```
 
 This specification should be updated whenever router signatures, schema models, or version prefixes change.

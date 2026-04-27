@@ -45,8 +45,6 @@ plugins:
       lang:
         - ko
         - en
-  - mermaid2
-
 markdown_extensions:
   - admonition
   - pymdownx.details
@@ -74,6 +72,7 @@ markdown_extensions:
 
 nav:
   - 홈: index.md
+  - 소개: about.md
   - 한글 문서:
       - 프로젝트 소개서: project-overview-ko.md
       - 시스템 아키텍처: architecture-ko.md

@@ -72,94 +72,79 @@
 | GitHub Actions | CI (빌드·린트·테스트) + CD (GitHub Pages 배포) |
 | GitHub Pages | 프론트엔드 데모 호스팅 |
 
+### 2.6 기술 스택 구성 비중
+
+```mermaid
+pie title 기술 스택 구성
+    "프론트엔드" : 8
+    "백엔드" : 6
+    "ETL" : 3
+    "공유 패키지" : 3
+    "인프라" : 3
+```
+
 ---
 
 ## 3. 시스템 아키텍처 다이어그램
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                        외부 공공 API                              │
-│  (울산항만공사 OPEN API: 선박위치, 선석현황, 기상, 화물통계 등)      │
-└──────────────┬───────────────────────────────────────────────────┘
-               │ HTTP (fetch_with_retry, 3회 재시도, 지수 백오프)
-               ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                     ETL 파이프라인 (etl/)                         │
-│                                                                  │
-│  ┌─────────────┐    ┌──────────────┐    ┌───────────────────┐    │
-│  │  Collectors  │───▶│  Raw Storage  │    │   Normalizers     │    │
-│  │ (8개 수집기) │    │ data/raw/     │    │ (vessel, berth,   │    │
-│  │             │────┼──────────────┼───▶│  weather, common)  │    │
-│  └─────────────┘    └──────────────┘    └───────┬───────────┘    │
-│                                                  │                │
-│                          ┌───────────────────────┘                │
-│                          ▼                                        │
-│              ┌──────────────────────┐                             │
-│              │   DB Upsert (async)   │                             │
-│              │ INSERT ON CONFLICT    │                             │
-│              └──────────┬───────────┘                             │
-└─────────────────────────┼────────────────────────────────────────┘
-                          │
-                          ▼
-┌──────────────────────────────────────────────────────────────────┐
-│              PostgreSQL + PostGIS 데이터베이스                     │
-│                                                                  │
-│  ┌─────────────────────┐  ┌──────────────────────────────────┐   │
-│  │   정적 테이블        │  │      시계열 테이블                 │   │
-│  │ port_zone           │  │  vessel_position (히스토리)        │   │
-│  │ berth               │  │  latest_vessel_position (최신)     │   │
-│  │ operator             │  │  vessel_event                     │   │
-│  │ route_segment       │  │  berth_status / latest_berth_status│   │
-│  │ tank_terminal       │  │  weather_observation               │   │
-│  │ cargo_type          │  │  arrival_stat / cargo_stat_monthly │   │
-│  └─────────────────────┘  └──────────────────────────────────┘   │
-└──────────────┬───────────────────────────────────────────────────┘
-               │
-               ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                  백엔드 API (FastAPI)                             │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐    │
-│  │  HTTP 라우터                                              │    │
-│  │  /vessels    /berths    /weather    /stats                │    │
-│  │  /graph/{type}/{id}    /scenarios   /insights   /docs    │    │
-│  ├──────────────────────────────────────────────────────────┤    │
-│  │  WebSocket 라우터                                         │    │
-│  │  /ws/live (선박 위치 스트림)    /ws/events (이벤트 스트림)   │    │
-│  ├──────────────────────────────────────────────────────────┤    │
-│  │  서비스 레이어                                             │    │
-│  │  vessels / berths / weather / stats / graph               │    │
-│  │  alert_engine / rule_engine / scenario_generator          │    │
-│  │  pubsub (Redis) / llm_summary / insight_rules            │    │
-│  └──────────────────────────────────────────────────────────┘    │
-└──────────────┬───────────────────────────────────────────────────┘
-               │ HTTP + WebSocket
-               ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                   프론트엔드 (React + THREE.js)                   │
-│                                                                  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                       │
-│  │ dataStore │  │ mapStore  │  │ uiStore   │  ← Zustand 스토어   │
-│  │ (도메인)  │  │ (3D 씬)   │  │ (UI 상태) │                      │
-│  └─────┬────┘  └─────┬────┘  └─────┬────┘                       │
-│        │             │             │                              │
-│        ▼             ▼             ▼                              │
-│  ┌──────────────────────────────────────────────────────────┐    │
-│  │                    PortScene (Canvas)                      │    │
-│  │  ┌─────────────────────┐  ┌────────────────────────────┐ │    │
-│  │  │   StaticScene (memo) │  │    DynamicLayers           │ │    │
-│  │  │  · SeaPlane          │  │  · VesselLayer (선박)       │ │    │
-│  │  │  · LandMass (지형)    │  │  · BerthStatusLayer (선석)  │ │    │
-│  │  │  · PortGeometry      │  │  · RouteLayer (항로)        │ │    │
-│  │  │    (부두·크레인·탱크)  │  │                            │ │    │
-│  │  └─────────────────────┘  └────────────────────────────┘ │    │
-│  └──────────────────────────────────────────────────────────┘    │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐    │
-│  │  UI 패널: 선박상세 | 선석상세 | 기상 | 통계 | 온톨로지그래프 │    │
-│  │           | 알림배너 | 필터 | 헤더                         │    │
-│  └──────────────────────────────────────────────────────────┘    │
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph External ["외부 공공 API"]
+        API["울산항만공사 OPEN API\n(선박위치, 선석현황, 기상, 화물통계 등)"]
+    end
+
+    External -- "HTTP (fetch_with_retry, 3회 재시도, 지수 백오프)" --> ETL
+
+    subgraph ETL ["ETL 파이프라인 (etl/)"]
+        direction TB
+        Collectors["Collectors\n(8개 수집기)"]
+        Raw["Raw Storage\n(data/raw/)"]
+        Normalizers["Normalizers\n(vessel, berth, weather, common)"]
+        Upsert["DB Upsert (async)\nINSERT ON CONFLICT"]
+
+        Collectors --> Raw
+        Collectors --> Normalizers
+        Raw -.-> Normalizers
+        Normalizers --> Upsert
+    end
+
+    ETL -- "SQLAlchemy Async" --> DB
+
+    subgraph DB ["PostgreSQL + PostGIS 데이터베이스"]
+        direction LR
+        Static["정적 테이블\n- port_zone\n- berth\n- operator\n- route_segment\n- tank_terminal\n- cargo_type"]
+        TimeSeries["시계열 테이블\n- vessel_position (히스토리)\n- latest_vessel_position (최신)\n- vessel_event\n- berth_status / latest_berth_status\n- weather_observation\n- arrival_stat / cargo_stat_monthly"]
+    end
+
+    DB --> Backend
+
+    subgraph Backend ["백엔드 API (FastAPI)"]
+        direction TB
+        Router["HTTP 라우터\n(/vessels, /berths, /weather, /stats, ...)\nWebSocket 라우터\n(/ws/live, /ws/events)"]
+        Service["서비스 레이어\n(vessels, berths, weather, stats, graph, ...)\n(alert_engine, rule_engine, scenario_generator, ...)"]
+        Router <--> Service
+    end
+
+    Backend -- "HTTP + WebSocket" --> Frontend
+
+    subgraph Frontend ["프론트엔드 (React + THREE.js)"]
+        direction TB
+        subgraph Stores ["Zustand 스토어"]
+            dataStore["dataStore\n(도메인)"]
+            mapStore["mapStore\n(3D 씬)"]
+            uiStore["uiStore\n(UI 상태)"]
+        end
+
+        subgraph Canvas ["PortScene (Canvas)"]
+            StaticScene["StaticScene (memo)\n· SeaPlane\n· LandMass (지형)\n· PortGeometry"]
+            DynamicLayers["DynamicLayers\n· VesselLayer (선박)\n· BerthStatusLayer (선석)\n· RouteLayer (항로)"]
+        end
+
+        UI["UI 패널\n(선박상세, 선석상세, 기상, 통계, 온톨로지그래프, 알림배너, 필터, 헤더)"]
+
+        Stores --> Canvas
+        Canvas --> UI
+    end
 ```
 
 ---
@@ -292,35 +277,35 @@ ulsan-port-3d/
 
 8개 수집기가 울산항만공사 공공 API를 주기적으로 호출한다.
 
+```mermaid
+flowchart TD
+    A["외부 공공 API 호출\nfetch_with_retry()\n(3회 재시도, 지수백오프, 30초 타임아웃)"]
+    B["원본 저장\nsave_raw_snapshot()\n→ data/raw/{source}/{date}/{timestamp}.json"]
+    C["정규화\nextract_items()\n→ normalize_*()\n(원본 API 형식 → DB 레코드 형식)"]
+    D["DB 적재\nINSERT ON CONFLICT\n(upsert)\n→ 히스토리 + 최신 스냅샷 동시 기록"]
+
+    A --> B
+    B --> C
+    C --> D
 ```
-┌────────────────────────┐
-│   외부 공공 API 호출    │
-│   fetch_with_retry()   │
-│   (3회 재시도, 지수백오프, 30초 타임아웃)
-└──────────┬─────────────┘
-           │
-           ▼
-┌────────────────────────┐
-│   원본 저장             │
-│   save_raw_snapshot()  │
-│   → data/raw/{source}/{date}/{timestamp}.json
-└──────────┬─────────────┘
-           │
-           ▼
-┌────────────────────────┐
-│   정규화               │
-│   extract_items()      │
-│   → normalize_*()      │
-│   (원본 API 형식 → DB 레코드 형식)
-└──────────┬─────────────┘
-           │
-           ▼
-┌────────────────────────┐
-│   DB 적재               │
-│   INSERT ON CONFLICT   │
-│   (upsert)             │
-│   → 히스토리 + 최신 스냅샷 동시 기록
-└────────────────────────┘
+
+### 5.1.1 수집 흐름 시퀀스
+
+```mermaid
+sequenceDiagram
+    participant API as 울산항 공공 API
+    participant Col as Collector
+    participant Raw as Raw Storage
+    participant Norm as Normalizer
+    participant DB as PostgreSQL
+    
+    Col->>API: HTTP 요청 (재시도 3회)
+    API-->>Col: JSON 응답
+    Col->>Raw: save_raw_snapshot()
+    Col->>Norm: extract_items()
+    Norm->>Norm: normalize_*()
+    Norm->>DB: INSERT ON CONFLICT (upsert)
+    DB-->>Norm: OK
 ```
 
 ### 5.2 수집기 목록
@@ -360,26 +345,27 @@ ulsan-port-3d/
 
 ### 6.2 관계 (Predicates)
 
-```
-Port ──hasZone──▶ Zone
-Zone ──hasBerth──▶ Berth
-Zone ──hasBuoy──▶ Buoy
-Zone ──hasRouteSegment──▶ RouteSegment
-Zone ──hasWeather──▶ WeatherObservation
-Zone ──hasForecast──▶ WeatherForecast
-Zone ──hasTide──▶ TideObservation
-Operator ──operates──▶ Berth
-Operator ──operates──▶ TankTerminal
-Operator ──hasHazardDoc──▶ HazardDoc
-TankTerminal ──locatedIn──▶ Zone
-TankTerminal ──stores──▶ CargoType
-Vessel ──hasVoyageCall──▶ VoyageCall
-Vessel ──hasPosition──▶ VesselPosition
-VoyageCall ──usesFacility──▶ Berth
-VoyageCall ──hasEvent──▶ VesselEvent
-Berth ──hasStatus──▶ BerthStatus
-Berth ──handlesCargo──▶ CargoType
-CargoType ──hasMsds──▶ MsdsDoc
+```mermaid
+graph TD
+    Port["Port"] -- "hasZone" --> Zone["Zone"]
+    Zone -- "hasBerth" --> Berth["Berth"]
+    Zone -- "hasBuoy" --> Buoy["Buoy"]
+    Zone -- "hasRouteSegment" --> RouteSegment["RouteSegment"]
+    Zone -- "hasWeather" --> WeatherObservation["WeatherObservation"]
+    Zone -- "hasForecast" --> WeatherForecast["WeatherForecast"]
+    Zone -- "hasTide" --> TideObservation["TideObservation"]
+    Operator["Operator"] -- "operates" --> Berth
+    Operator -- "operates" --> TankTerminal["TankTerminal"]
+    Operator -- "hasHazardDoc" --> HazardDoc["HazardDoc"]
+    TankTerminal -- "locatedIn" --> Zone
+    TankTerminal -- "stores" --> CargoType["CargoType"]
+    Vessel["Vessel"] -- "hasVoyageCall" --> VoyageCall["VoyageCall"]
+    Vessel -- "hasPosition" --> VesselPosition["VesselPosition"]
+    VoyageCall -- "usesFacility" --> Berth
+    VoyageCall -- "hasEvent" --> VesselEvent["VesselEvent"]
+    Berth -- "hasStatus" --> BerthStatus["BerthStatus"]
+    Berth -- "handlesCargo" --> CargoType
+    CargoType -- "hasMsds" --> MsdsDoc["MsdsDoc"]
 ```
 
 ### 6.3 온톨로지 → DB 매핑
@@ -431,6 +417,22 @@ WGS84 (위도/경도)  ──latLonToLocal()──▶  THREE.js 로컬 좌표
 |--------|----------|-----------|------|
 | **StaticScene** (memo) | SeaPlane, LandMass, PortGeometry | 없음 (1회 렌더) | 해수면, 육지·해안선, 부두·크레인·탱크 |
 | **DynamicLayers** | VesselLayer, BerthStatusLayer, RouteLayer | 실시간 (WS/HTTP) | 선박 위치·방향, 선석 상태 색상, 항로 |
+
+### 7.2.1 선박 렌더링 상태도
+
+```mermaid
+stateDiagram-v2
+    [*] --> 대기중: 데이터 수신 전
+    대기중 --> 위치수신: WebSocket 메시지
+    위치수신 --> 좌표변환: latLonToLocal()
+    좌표변환 --> 메쉬생성: ship_type별 분기
+    메쉬생성 --> 렌더링: THREE.js Scene 추가
+    렌더링 --> 위치갱신: 새 위치 데이터
+    위치갱신 --> 좌표변환
+    렌더링 --> 선택됨: 사용자 클릭
+    선택됨 --> 상세패널: VesselDetailPanel 표시
+    상세패널 --> 렌더링: 패널 닫기
+```
 
 ### 7.3 지형 렌더링 (LandMass)
 
@@ -495,27 +497,53 @@ Zustand를 사용하여 3개의 독립 스토어로 분리한다.
 | **mapStore** | 3D 씬 상태 | cameraPosition, activeLayerIds, selectedEntity, zoomLevel |
 | **uiStore** | UI 상태 | 패널 토글, 탭, 타임라인, 재생 |
 
+### 8.1.1 스토어 클래스 구조
+
+```mermaid
+classDiagram
+    class dataStore {
+        +Vessel[] vessels
+        +Berth[] berths
+        +Weather weather
+        +setVessels()
+        +setBerths()
+        +setWeather()
+    }
+    class mapStore {
+        +Vector3 cameraPosition
+        +string[] activeLayerIds
+        +Entity selectedEntity
+        +number zoomLevel
+        +selectEntity()
+        +setCamera()
+    }
+    class uiStore {
+        +boolean panelVisible
+        +string activeTab
+        +number timelinePosition
+        +boolean isPlaying
+        +togglePanel()
+        +setTab()
+    }
+    dataStore <.. mapStore : 엔티티 참조
+    mapStore <.. uiStore : 선택 상태 반영
+```
+
 ### 8.2 데이터 흐름
 
-```
-API/WebSocket 응답
-    │
-    ▼
-dataStore.setVessels() / setBerths() / setWeather()
-    │
-    ▼
-PortScene → DynamicLayers (useDataStore 구독)
-    │
-    ▼
-VesselLayer / BerthStatusLayer가 즉시 리렌더
+```mermaid
+flowchart TD
+    subgraph Update ["상태 업데이트"]
+        A["API/WebSocket 응답"] --> B["dataStore.setVessels()\n/ setBerths()\n/ setWeather()"]
+        B --> C["PortScene → DynamicLayers\n(useDataStore 구독)"]
+        C --> D["VesselLayer / BerthStatusLayer\n즉시 리렌더"]
+    end
 
-사용자 인터랙션 (선박 클릭)
-    │
-    ▼
-mapStore.selectEntity('vessel', id)
-    │
-    ▼
-VesselDetailPanel (useMapStore 구독) → 상세 정보 표시
+    subgraph Interaction ["사용자 인터랙션"]
+        E["사용자 인터랙션\n(선박 클릭)"] --> F["mapStore.selectEntity\n('vessel', id)"]
+        F --> G["VesselDetailPanel\n(useMapStore 구독)"]
+        G --> H["상세 정보 표시"]
+    end
 ```
 
 ---
@@ -532,20 +560,15 @@ VITE_USE_MOCK=true pnpm dev
 
 ### 9.2 동작 원리
 
-```
-main.tsx
-  │ VITE_USE_MOCK === 'true'?
-  ├─ YES → enableMocks()
-  │         │
-  │         ▼
-  │    Object.assign(apiClient, mockApiClient)
-  │    (모든 API 메서드를 Mock으로 교체)
-  │         │
-  │         ▼
-  │    App.tsx → startMockWebSocket()
-  │    (5초마다 선박 위치 업데이트 시뮬레이션)
-  │
-  └─ NO → 실제 apiClient + useWebSocket 사용
+```mermaid
+flowchart TD
+    Start["main.tsx"] --> MockCheck{"VITE_USE_MOCK === 'true'?"}
+    
+    MockCheck -- "YES" --> Enable["enableMocks()"]
+    Enable --> Replace["Object.assign(apiClient, mockApiClient)\n(모든 API 메서드를 Mock으로 교체)"]
+    Replace --> StartWS["App.tsx → startMockWebSocket()\n(5초마다 선박 위치 업데이트 시뮬레이션)"]
+    
+    MockCheck -- "NO" --> Real["실제 apiClient + useWebSocket 사용"]
 ```
 
 ### 9.3 Mock 데이터 규모
@@ -607,20 +630,43 @@ main.tsx
 
 ## 12. 배포 파이프라인
 
+### 12.1 브랜치 전략
+
+```mermaid
+gitGraph
+    commit id: "init"
+    branch feat/15-rest-api
+    commit id: "feat: add vessel router"
+    commit id: "feat: add berth router"
+    checkout main
+    merge feat/15-rest-api id: "squash merge"
+    branch fix/22-berth-color
+    commit id: "fix: berth status color"
+    checkout main
+    merge fix/22-berth-color id: "squash merge fix"
+    commit id: "deploy to Pages"
 ```
-개발자 Push → main 브랜치
-    │
-    ├─ CI (ci.yml)
-    │   ├─ pnpm install
-    │   ├─ TypeScript type-check
-    │   ├─ ESLint
-    │   └─ pnpm build
-    │
-    └─ CD (deploy-pages.yml)
-        ├─ pnpm build (프론트엔드)
-        ├─ dist/ 아티팩트 업로드
-        └─ GitHub Pages 배포
-            → https://yeongseon.github.io/ulsan-port-3d/
+
+### 12.2 CI/CD 워크플로우
+
+```mermaid
+flowchart TD
+    Push["개발자 Push → main 브랜치"]
+    
+    Push --> CI["CI (ci.yml)"]
+    subgraph CI_Process ["CI 프로세스"]
+        CI1["pnpm install"] --> CI2["TypeScript type-check"]
+        CI2 --> CI3["ESLint"]
+        CI3 --> CI4["pnpm build"]
+    end
+    
+    Push --> CD["CD (deploy-pages.yml)"]
+    subgraph CD_Process ["CD 프로세스"]
+        CD1["pnpm build (프론트엔드)"] --> CD2["dist/ 아티팩트 업로드"]
+        CD2 --> CD3["GitHub Pages 배포"]
+    end
+
+    CD3 --> URL["https://yeongseon.github.io/ulsan-port-3d/"]
 ```
 
 ---
